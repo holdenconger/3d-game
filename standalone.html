@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bubble Wrap Packing Dash</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: radial-gradient(circle at top, #1f2a48, #0d101f 65%);
+        color: #eef5ff;
+      }
+
+      body {
+        margin: 0;
+        overscroll-behavior: none;
+        height: 100vh;
+        display: grid;
+        place-items: center;
+      }
+
+      #gameCanvas {
+        width: min(100vw, 1200px);
+        height: min(90vh, 720px);
+        border-radius: 18px;
+        box-shadow:
+          0 20px 60px rgba(0, 0, 0, 0.45),
+          inset 0 0 0 2px rgba(255, 255, 255, 0.08);
+        background: linear-gradient(135deg, rgba(28, 36, 64, 0.95), rgba(16, 22, 45, 0.95));
+      }
+
+      #overlay {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+        background: linear-gradient(145deg, rgba(7, 11, 22, 0.92), rgba(24, 32, 52, 0.85));
+        backdrop-filter: blur(12px);
+        text-align: center;
+        transition: opacity 0.6s ease, visibility 0.6s ease;
+      }
+
+      #overlay.hidden {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+
+      #overlay h1 {
+        font-size: clamp(2.5rem, 5vw, 3.75rem);
+        margin: 0;
+        text-transform: uppercase;
+        letter-spacing: 0.2rem;
+        color: #8ddcff;
+      }
+
+      #overlay p {
+        max-width: 600px;
+        line-height: 1.5;
+        color: rgba(232, 244, 255, 0.75);
+        margin: 0;
+      }
+
+      #hud {
+        position: absolute;
+        top: 1.5rem;
+        display: flex;
+        gap: 1.5rem;
+        font-size: 1.2rem;
+        font-weight: 600;
+        padding: 0.75rem 1.5rem;
+        border-radius: 999px;
+        background: rgba(10, 15, 30, 0.65);
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+        backdrop-filter: blur(8px);
+      }
+
+      #hud span {
+        color: #ffe77a;
+      }
+
+      #startButton {
+        margin-top: 1rem;
+        padding: 0.75rem 2.75rem;
+        font-size: 1.1rem;
+        border-radius: 999px;
+        border: none;
+        background: linear-gradient(135deg, #47c0ff, #877aff);
+        color: white;
+        cursor: pointer;
+        transition: transform 0.25s ease, box-shadow 0.25s ease;
+        box-shadow: 0 10px 30px rgba(71, 192, 255, 0.45);
+      }
+
+      #startButton:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 14px 34px rgba(71, 192, 255, 0.6);
+      }
+
+      #toast {
+        position: absolute;
+        bottom: 3rem;
+        left: 50%;
+        transform: translateX(-50%) translateY(20px);
+        padding: 0.75rem 1.5rem;
+        border-radius: 12px;
+        background: rgba(16, 30, 59, 0.9);
+        color: #fff;
+        font-weight: 600;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s ease, transform 0.3s ease;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+      }
+
+      #toast.visible {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="overlay">
+      <h1>Bubble Wrap Packing Dash</h1>
+      <p>
+        Drag items onto the bubble wrap to wrap them, drop wrapped items into a box, then move ready boxes into the truck bay. Work fast to keep up with incoming packages!
+      </p>
+      <button id="startButton">Start Shift</button>
+    </div>
+    <div id="hud">
+      <div>Score: <span id="score">0</span></div>
+      <div>Time Left: <span id="timer">120</span>s</div>
+      <div>Queue: <span id="queue">0</span></div>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+    <div id="toast"></div>
+
+    <script type="module">
+      import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js";
+      import { OrbitControls } from "https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/controls/OrbitControls.js";
+
+      const canvas = document.getElementById("gameCanvas");
+      const overlay = document.getElementById("overlay");
+      const startButton = document.getElementById("startButton");
+      const scoreEl = document.getElementById("score");
+      const timerEl = document.getElementById("timer");
+      const queueEl = document.getElementById("queue");
+      const toastEl = document.getElementById("toast");
+      const overlayInstructions = overlay.querySelector("p");
+      const baseInstructionText = overlayInstructions.textContent;
+
+      let toastTimeout;
+
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x060910);
+
+      const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 60);
+      camera.position.set(7.5, 7.2, 10.5);
+
+      const renderer = new THREE.WebGLRenderer({
+        canvas,
+        antialias: true,
+        alpha: true,
+      });
+
+      const controls = new OrbitControls(camera, canvas);
+      controls.enableDamping = true;
+      controls.enablePan = false;
+      controls.minPolarAngle = Math.PI / 4.2;
+      controls.maxPolarAngle = Math.PI / 2.15;
+      controls.maxDistance = 15;
+      controls.minDistance = 6.25;
+      controls.target.set(0, 0.75, -0.75);
+
+      const ambient = new THREE.HemisphereLight(0x7fc1ff, 0x10131c, 0.7);
+      scene.add(ambient);
+
+      const directional = new THREE.DirectionalLight(0xf8f2e7, 0.9);
+      directional.position.set(4, 10, 8);
+      directional.castShadow = true;
+      directional.shadow.mapSize.set(1024, 1024);
+      scene.add(directional);
+
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+      function resizeRenderer() {
+        const width = canvas.clientWidth;
+        const height = canvas.clientHeight;
+        const ratio = window.devicePixelRatio || 1;
+        if (canvas.width !== width * ratio || canvas.height !== height * ratio) {
+          renderer.setPixelRatio(ratio);
+          renderer.setSize(width, height, false);
+          camera.aspect = width / height;
+          camera.updateProjectionMatrix();
+        }
+      }
+
+      window.addEventListener("resize", resizeRenderer);
+      resizeRenderer();
+
+      function createTable() {
+        const table = new THREE.Mesh(
+          new THREE.BoxGeometry(16, 0.6, 10.5),
+          new THREE.MeshStandardMaterial({ color: 0x2d3346, metalness: 0.05, roughness: 0.8 })
+        );
+        table.position.set(0, -0.3, -1);
+        table.castShadow = false;
+        table.receiveShadow = true;
+        scene.add(table);
+
+        const mat = new THREE.MeshStandardMaterial({
+          color: 0x19202f,
+          emissive: 0x050912,
+          roughness: 0.75,
+        });
+        const workSurface = new THREE.Mesh(new THREE.PlaneGeometry(16, 10.5), mat);
+        workSurface.rotation.x = -Math.PI / 2;
+        workSurface.position.set(0, 0, -1);
+        workSurface.receiveShadow = true;
+        scene.add(workSurface);
+
+        const conveyor = new THREE.Mesh(
+          new THREE.BoxGeometry(4.2, 0.4, 2),
+          new THREE.MeshStandardMaterial({ color: 0x202738, roughness: 0.6 })
+        );
+        conveyor.position.set(-6.2, -0.01, 2);
+        scene.add(conveyor);
+
+        const lightBar = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.12, 0.12, 8, 24),
+          new THREE.MeshStandardMaterial({ color: 0x1f263a, emissive: 0x04080f })
+        );
+        lightBar.rotation.z = Math.PI / 2;
+        lightBar.position.set(0, 4.8, -1);
+        scene.add(lightBar);
+      }
+
+      createTable();
+
+      function createZone({ name, size, position, color, emissive }) {
+        const mat = new THREE.MeshStandardMaterial({
+          color,
+          emissive,
+          transparent: true,
+          opacity: 0.65,
+          roughness: 0.25,
+        });
+        const mesh = new THREE.Mesh(new THREE.PlaneGeometry(size.x, size.z), mat);
+        mesh.rotation.x = -Math.PI / 2;
+        mesh.position.copy(position);
+        mesh.position.y = 0.01;
+        mesh.receiveShadow = true;
+        scene.add(mesh);
+
+        const bounds = new THREE.Box3().setFromCenterAndSize(
+          new THREE.Vector3(position.x, 0.25, position.z),
+          new THREE.Vector3(size.x, 1.2, size.z)
+        );
+
+        return { name, mesh, bounds, size, position };
+      }
+
+      const zones = {
+        wrap: createZone({
+          name: "wrap",
+          size: new THREE.Vector3(4, 0, 4),
+          position: new THREE.Vector3(-3.5, 0, -1.25),
+          color: 0x2c9bff,
+          emissive: 0x2568f4,
+        }),
+        box: createZone({
+          name: "box",
+          size: new THREE.Vector3(3.5, 0, 3.5),
+          position: new THREE.Vector3(0.4, 0, -1.1),
+          color: 0xf0a65a,
+          emissive: 0xc77426,
+        }),
+        truck: createZone({
+          name: "truck",
+          size: new THREE.Vector3(4.5, 0, 4),
+          position: new THREE.Vector3(4.7, 0, -1.1),
+          color: 0x4ed072,
+          emissive: 0x2c8d49,
+        }),
+        staging: createZone({
+          name: "staging",
+          size: new THREE.Vector3(3.6, 0, 2.2),
+          position: new THREE.Vector3(-5.4, 0, 2.2),
+          color: 0x7486ff,
+          emissive: 0x4e57ff,
+        }),
+      };
+
+      zones.staging.mesh.material.opacity = 0.4;
+      zones.staging.mesh.material.emissiveIntensity = 0.4;
+
+      function createTruck() {
+        const truck = new THREE.Group();
+
+        const body = new THREE.Mesh(
+          new THREE.BoxGeometry(2.8, 2.1, 4.2),
+          new THREE.MeshStandardMaterial({ color: 0xfaf9f2, roughness: 0.6 })
+        );
+        body.position.set(0, 1.1, -0.2);
+        body.castShadow = true;
+        body.receiveShadow = true;
+        truck.add(body);
+
+        const cab = new THREE.Mesh(
+          new THREE.BoxGeometry(1.4, 1.6, 1.7),
+          new THREE.MeshStandardMaterial({ color: 0xd9dde7, roughness: 0.5 })
+        );
+        cab.position.set(0, 0.9, 1.8);
+        cab.castShadow = true;
+        truck.add(cab);
+
+        const wheelGeo = new THREE.CylinderGeometry(0.4, 0.4, 0.4, 24);
+        wheelGeo.rotateZ(Math.PI / 2);
+        const wheelMat = new THREE.MeshStandardMaterial({ color: 0x1a1c20, roughness: 0.9 });
+
+        const wheelOffsets = [
+          [-1.0, 0.45, 0.6],
+          [1.0, 0.45, 0.6],
+          [-1.0, 0.45, -1.9],
+          [1.0, 0.45, -1.9],
+        ];
+        for (const [x, y, z] of wheelOffsets) {
+          const wheel = new THREE.Mesh(wheelGeo, wheelMat);
+          wheel.position.set(x, y, z);
+          wheel.castShadow = true;
+          truck.add(wheel);
+        }
+
+        const ramp = new THREE.Mesh(
+          new THREE.PlaneGeometry(2.8, 2.2),
+          new THREE.MeshStandardMaterial({ color: 0x6fd692, roughness: 0.4, metalness: 0.1 })
+        );
+        ramp.rotation.x = -Math.PI / 3.5;
+        ramp.position.set(0, 0, 2.1);
+        ramp.receiveShadow = true;
+        truck.add(ramp);
+
+        truck.position.set(6.2, 0, -1.1);
+        scene.add(truck);
+      }
+
+      createTruck();
+
+      const raycaster = new THREE.Raycaster();
+      const pointer = new THREE.Vector2();
+      const dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+      const dragPoint = new THREE.Vector3();
+      let grabbedItem = null;
+
+      const activeItems = [];
+
+      const itemTypes = [
+        {
+          name: "Tablet",
+          geometry: new THREE.BoxGeometry(0.9, 0.2, 1.2),
+          material: new THREE.MeshStandardMaterial({ color: 0x2262ee, metalness: 0.2, roughness: 0.4 }),
+        },
+        {
+          name: "Lamp",
+          geometry: new THREE.CylinderGeometry(0.45, 0.35, 1.3, 24),
+          material: new THREE.MeshStandardMaterial({ color: 0xffa55f, roughness: 0.35, metalness: 0.05 }),
+        },
+        {
+          name: "Vase",
+          geometry: new THREE.LatheGeometry(
+            [
+              new THREE.Vector2(0.0, 0),
+              new THREE.Vector2(0.25, 0),
+              new THREE.Vector2(0.45, 0.3),
+              new THREE.Vector2(0.35, 0.6),
+              new THREE.Vector2(0.4, 1),
+              new THREE.Vector2(0.2, 1.3),
+              new THREE.Vector2(0.25, 1.5),
+            ],
+            32
+          ),
+          material: new THREE.MeshStandardMaterial({ color: 0xc080f7, metalness: 0.15, roughness: 0.35 }),
+        },
+        {
+          name: "Speaker",
+          geometry: new THREE.CylinderGeometry(0.5, 0.5, 1.1, 20),
+          material: new THREE.MeshStandardMaterial({ color: 0x444854, roughness: 0.7, metalness: 0.25 }),
+        },
+        {
+          name: "Game Console",
+          geometry: new THREE.BoxGeometry(1.2, 0.28, 0.8),
+          material: new THREE.MeshStandardMaterial({ color: 0x191d2e, metalness: 0.4, roughness: 0.25 }),
+        },
+      ];
+
+      let idCounter = 0;
+
+      class PackingItem {
+        constructor(definition) {
+          this.id = ++idCounter;
+          this.definition = definition;
+          this.state = "raw";
+          this.root = new THREE.Group();
+          this.root.position.copy(randomStagingPoint());
+          this.root.userData.item = this;
+
+          this.baseMesh = new THREE.Mesh(definition.geometry.clone(), definition.material.clone());
+          this.baseMesh.castShadow = true;
+          this.baseMesh.receiveShadow = true;
+          this.baseMesh.name = "item";
+          this.root.add(this.baseMesh);
+
+          this.wrapOverlay = this.createWrapOverlay();
+          this.boxMesh = this.createBoxMesh();
+
+          this.wrapOverlay.visible = false;
+          this.boxMesh.visible = false;
+
+          this.shadowHelper();
+          scene.add(this.root);
+
+          this.originalPosition = this.root.position.clone();
+        }
+
+        createWrapOverlay() {
+          const material = new THREE.MeshPhysicalMaterial({
+            color: 0x7ae0ff,
+            emissive: 0x114f9b,
+            metalness: 0.8,
+            roughness: 0.15,
+            clearcoat: 0.9,
+            transparent: true,
+            opacity: 0.35,
+          });
+          const overlay = new THREE.Mesh(this.baseMesh.geometry.clone(), material);
+          overlay.castShadow = false;
+          overlay.receiveShadow = false;
+          overlay.scale.setScalar(1.12);
+          this.root.add(overlay);
+          return overlay;
+        }
+
+        createBoxMesh() {
+          const geometry = new THREE.BoxGeometry(1.3, 1.1, 1.3);
+          const material = new THREE.MeshStandardMaterial({
+            color: 0xb37a3d,
+            roughness: 0.85,
+            metalness: 0.05,
+          });
+          const box = new THREE.Mesh(geometry, material);
+          box.position.y = 0.4;
+          box.castShadow = true;
+          box.receiveShadow = true;
+
+          const flapsGeo = new THREE.PlaneGeometry(1.3, 0.6);
+          const flapMat = new THREE.MeshStandardMaterial({
+            color: 0xcd9754,
+            side: THREE.DoubleSide,
+            roughness: 0.8,
+          });
+
+          const flapLeft = new THREE.Mesh(flapsGeo, flapMat);
+          flapLeft.rotation.x = Math.PI / 4;
+          flapLeft.position.set(-0.65, 0.75, 0);
+          flapLeft.rotation.z = Math.PI / 2;
+          const flapRight = flapLeft.clone();
+          flapRight.position.x = 0.65;
+          flapRight.rotation.x = -Math.PI / 4;
+          flapRight.rotation.z = -Math.PI / 2;
+          const flapFront = new THREE.Mesh(flapsGeo, flapMat);
+          flapFront.rotation.x = Math.PI / 4;
+          flapFront.position.set(0, 0.75, 0.65);
+          flapFront.rotation.y = Math.PI / 2;
+          const flapBack = flapFront.clone();
+          flapBack.position.z = -0.65;
+          flapBack.rotation.x = -Math.PI / 4;
+
+          const boxGroup = new THREE.Group();
+          boxGroup.add(box, flapLeft, flapRight, flapFront, flapBack);
+          this.root.add(boxGroup);
+
+          return boxGroup;
+        }
+
+        shadowHelper() {
+          const helper = new THREE.Mesh(
+            new THREE.CircleGeometry(0.55, 24),
+            new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.25 })
+          );
+          helper.rotation.x = -Math.PI / 2;
+          helper.position.y = -0.02;
+          this.root.add(helper);
+        }
+
+        setPosition(pos) {
+          this.root.position.copy(pos);
+        }
+
+        wrap() {
+          if (this.state !== "raw") return false;
+          this.state = "wrapped";
+          this.wrapOverlay.visible = true;
+          pulseMesh(this.wrapOverlay);
+          showToast(`${this.definition.name} wrapped!`);
+          return true;
+        }
+
+        box() {
+          if (this.state !== "wrapped") return false;
+          this.state = "boxed";
+          this.wrapOverlay.visible = false;
+          this.baseMesh.visible = false;
+          this.boxMesh.visible = true;
+          this.boxMesh.scale.set(1, 1, 1);
+          pulseMesh(this.boxMesh);
+          showToast(`${this.definition.name} boxed!`);
+          return true;
+        }
+
+        resetBoxVisual() {
+          this.boxMesh.scale.set(1, 1, 1);
+        }
+
+        deliver() {
+          showToast(`${this.definition.name} shipped!`);
+          scene.remove(this.root);
+          this.boxMesh.visible = false;
+          this.baseMesh.visible = true;
+          this.wrapOverlay.visible = false;
+          this.state = "raw";
+        }
+
+        dispose() {
+          scene.remove(this.root);
+        }
+      }
+
+      function randomStagingPoint() {
+        const bounds = zones.staging.bounds;
+        const x = THREE.MathUtils.randFloat(bounds.min.x + 0.4, bounds.max.x - 0.4);
+        const z = THREE.MathUtils.randFloat(bounds.min.z + 0.4, bounds.max.z - 0.4);
+        return new THREE.Vector3(x, 0.05, z);
+      }
+
+      function pulseMesh(mesh) {
+        const scaleFrom = mesh.scale.clone();
+        const scaleTo = scaleFrom.clone().multiplyScalar(1.2);
+        let elapsed = 0;
+        const duration = 0.28;
+
+        const pulse = (delta) => {
+          elapsed += delta;
+          const t = Math.min(elapsed / duration, 1);
+          const eased = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+          mesh.scale.lerpVectors(scaleFrom, scaleTo, eased);
+          if (t >= 1) {
+            mesh.scale.copy(scaleFrom);
+            mesh.userData.pulseUpdater = null;
+          }
+        };
+
+        mesh.userData.pulseUpdater = pulse;
+      }
+
+      function showToast(message) {
+        toastEl.textContent = message;
+        toastEl.classList.add("visible");
+        if (toastTimeout) clearTimeout(toastTimeout);
+        toastTimeout = setTimeout(() => {
+          toastEl.classList.remove("visible");
+        }, 1500);
+      }
+
+      function spawnItem() {
+        const def = THREE.MathUtils.randInt(0, itemTypes.length - 1);
+        const item = new PackingItem(itemTypes[def]);
+        activeItems.push(item);
+        queueEl.textContent = activeItems.length.toString();
+        pulseMesh(item.baseMesh);
+        return item;
+      }
+
+      let score = 0;
+      let timeLeft = 120;
+      let isRunning = false;
+      let timerAccumulator = 0;
+      let spawnCooldown = 0;
+      let activePointerId = null;
+
+      function resetGame() {
+        for (const item of activeItems) {
+          item.dispose();
+        }
+        activeItems.length = 0;
+        score = 0;
+        timeLeft = 120;
+        scoreEl.textContent = "0";
+        timerEl.textContent = "120";
+        queueEl.textContent = "0";
+        timerAccumulator = 0;
+        spawnCooldown = 0;
+        activePointerId = null;
+        grabRelease();
+      }
+
+      function startGame() {
+        resetGame();
+        overlay.classList.add("hidden");
+        overlayInstructions.textContent = baseInstructionText;
+        startButton.textContent = "Back to Work";
+        isRunning = true;
+        showToast("Shift started! Wrap those packages!");
+        spawnItem();
+        spawnItem();
+        spawnCooldown = 2.5;
+      }
+
+      function endGame() {
+        isRunning = false;
+        overlay.classList.remove("hidden");
+        toastEl.classList.remove("visible");
+        overlayInstructions.textContent = `Final score: ${score}. Drag items onto the bubble wrap to wrap them, then into a box, and finally into the truck bay.`;
+        startButton.textContent = "Play Again";
+      }
+
+      startButton.addEventListener("click", () => {
+        startGame();
+      });
+
+      function setPointerFromEvent(event) {
+        const rect = canvas.getBoundingClientRect();
+        pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+        pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      }
+
+      function grabRelease() {
+        if (grabbedItem) {
+          grabbedItem.root.position.y = Math.max(grabbedItem.root.position.y, 0.05);
+          grabbedItem = null;
+        }
+      }
+
+      canvas.addEventListener("pointerdown", (event) => {
+        if (!isRunning) return;
+        setPointerFromEvent(event);
+        raycaster.setFromCamera(pointer, camera);
+        const draggable = [];
+        for (const item of activeItems) {
+          if (item.baseMesh.visible) draggable.push(item.baseMesh);
+          if (item.wrapOverlay.visible) draggable.push(item.wrapOverlay);
+          if (item.boxMesh.visible) draggable.push(item.boxMesh);
+        }
+        const intersections = raycaster.intersectObjects(draggable, true);
+        if (intersections.length === 0) return;
+
+        let current = intersections[0].object;
+        while (current && !current.userData.item && current.parent) {
+          current = current.parent;
+        }
+        if (current && current.userData.item) {
+          grabbedItem = current.userData.item;
+          controls.enabled = false;
+          canvas.setPointerCapture(event.pointerId);
+          activePointerId = event.pointerId;
+        }
+      });
+
+      canvas.addEventListener("pointermove", (event) => {
+        if (!grabbedItem) return;
+        setPointerFromEvent(event);
+        raycaster.setFromCamera(pointer, camera);
+        const hit = raycaster.ray.intersectPlane(dragPlane, dragPoint);
+        if (hit) {
+          grabbedItem.setPosition(new THREE.Vector3(dragPoint.x, 0.75, dragPoint.z));
+        }
+      });
+
+      canvas.addEventListener("pointerup", (event) => {
+        if (activePointerId === event.pointerId) {
+          canvas.releasePointerCapture(event.pointerId);
+          activePointerId = null;
+        }
+        controls.enabled = true;
+        if (!grabbedItem) return;
+        finalizeDrop(grabbedItem);
+        grabRelease();
+      });
+
+      canvas.addEventListener("pointercancel", (event) => {
+        if (activePointerId === event.pointerId) {
+          canvas.releasePointerCapture(event.pointerId);
+          activePointerId = null;
+        }
+        controls.enabled = true;
+        grabRelease();
+      });
+
+      canvas.addEventListener("pointerleave", (event) => {
+        if (activePointerId === event.pointerId) {
+          canvas.releasePointerCapture(event.pointerId);
+          activePointerId = null;
+        }
+        controls.enabled = true;
+        grabRelease();
+      });
+
+      function isInsideZone(item, zone) {
+        const pos = item.root.position;
+        return zone.bounds.containsPoint(new THREE.Vector3(pos.x, 0.25, pos.z));
+      }
+
+      function finalizeDrop(item) {
+        item.setPosition(new THREE.Vector3(item.root.position.x, 0.05, item.root.position.z));
+
+        if (isInsideZone(item, zones.wrap)) {
+          if (item.wrap()) {
+            item.setPosition(new THREE.Vector3(zones.wrap.position.x, 0.05, zones.wrap.position.z));
+          }
+          return;
+        }
+
+        if (isInsideZone(item, zones.box)) {
+          if (item.box()) {
+            item.setPosition(new THREE.Vector3(zones.box.position.x, 0.05, zones.box.position.z));
+            item.resetBoxVisual();
+          }
+          return;
+        }
+
+        if (isInsideZone(item, zones.truck)) {
+          if (item.state === "boxed") {
+            score += 10;
+            scoreEl.textContent = score.toString();
+            item.deliver();
+            const index = activeItems.indexOf(item);
+            if (index >= 0) activeItems.splice(index, 1);
+            queueEl.textContent = activeItems.length.toString();
+          } else {
+            showToast("Only boxed items go into the truck!");
+          }
+          return;
+        }
+
+        if (isInsideZone(item, zones.staging)) {
+          item.setPosition(randomStagingPoint());
+          return;
+        }
+
+        // return to center of table if dropped elsewhere
+        item.setPosition(new THREE.Vector3(0, 0.05, -1));
+      }
+
+      const clock = new THREE.Clock();
+
+      function update(delta) {
+        controls.update();
+        for (const item of activeItems) {
+          if (item.wrapOverlay.visible && item.wrapOverlay.userData.pulseUpdater) {
+            item.wrapOverlay.userData.pulseUpdater(delta);
+          }
+          if (item.boxMesh.visible && item.boxMesh.userData.pulseUpdater) {
+            item.boxMesh.userData.pulseUpdater(delta);
+          }
+          if (item.baseMesh.visible && item.baseMesh.userData.pulseUpdater) {
+            item.baseMesh.userData.pulseUpdater(delta);
+          }
+        }
+      }
+
+      function gameLoop() {
+        resizeRenderer();
+        const delta = clock.getDelta();
+        update(delta);
+        renderer.render(scene, camera);
+
+        if (isRunning) {
+          timerAccumulator += delta;
+          if (timerAccumulator >= 1) {
+            const decrement = Math.floor(timerAccumulator);
+            timeLeft -= decrement;
+            timerAccumulator -= decrement;
+            if (timeLeft <= 0) {
+              timeLeft = 0;
+              timerEl.textContent = "0";
+              endGame();
+            } else {
+              timerEl.textContent = timeLeft.toString();
+            }
+          }
+
+          spawnCooldown -= delta;
+          if (spawnCooldown <= 0) {
+            if (activeItems.length < 6) {
+              spawnItem();
+            } else {
+              showToast("Backlog piling up! Deliver some boxes!");
+            }
+            spawnCooldown = THREE.MathUtils.randFloat(4.5, 6.5);
+          }
+        }
+
+        requestAnimationFrame(gameLoop);
+      }
+
+      requestAnimationFrame(gameLoop);
+
+      showToast("Welcome! Tap Start to begin your shift.");
+    </script>
+  </body>
+</html>
