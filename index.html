@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bubble Wrap Packing Dash</title>
+    <link rel="stylesheet" href="style.css" />
+    <script type="module" src="main.js" defer></script>
+  </head>
+  <body>
+    <div id="overlay">
+      <h1>Bubble Wrap Packing Dash</h1>
+      <p>
+        Drag items onto the bubble wrap to wrap them, drop wrapped items into a
+        box, then move ready boxes into the truck bay. Work fast to keep up with
+        incoming packages!
+      </p>
+      <button id="startButton">Start Shift</button>
+    </div>
+    <div id="hud">
+      <div>Score: <span id="score">0</span></div>
+      <div>Time Left: <span id="timer">120</span>s</div>
+      <div>Queue: <span id="queue">0</span></div>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+    <div id="toast"></div>
+  </body>
+</html>

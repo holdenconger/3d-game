@@ -1,0 +1,110 @@
+:root {
+  color-scheme: dark;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  background: radial-gradient(circle at top, #1f2a48, #0d101f 65%);
+  color: #eef5ff;
+}
+
+body {
+  margin: 0;
+  overscroll-behavior: none;
+  height: 100vh;
+  display: grid;
+  place-items: center;
+}
+
+#gameCanvas {
+  width: min(100vw, 1200px);
+  height: min(90vh, 720px);
+  border-radius: 18px;
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.45),
+    inset 0 0 0 2px rgba(255, 255, 255, 0.08);
+  background: linear-gradient(135deg, rgba(28, 36, 64, 0.95), rgba(16, 22, 45, 0.95));
+}
+
+#overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  background: linear-gradient(145deg, rgba(7, 11, 22, 0.92), rgba(24, 32, 52, 0.85));
+  backdrop-filter: blur(12px);
+  text-align: center;
+  transition: opacity 0.6s ease, visibility 0.6s ease;
+}
+
+#overlay.hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+#overlay h1 {
+  font-size: clamp(2.5rem, 5vw, 3.75rem);
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.2rem;
+  color: #8ddcff;
+}
+
+#overlay p {
+  max-width: 600px;
+  line-height: 1.5;
+  color: rgba(232, 244, 255, 0.75);
+  margin: 0;
+}
+
+#hud {
+  display: flex;
+  gap: 1.5rem;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+#hud span {
+  color: #ffe77a;
+}
+
+#startButton {
+  margin-top: 1rem;
+  padding: 0.75rem 2.75rem;
+  font-size: 1.1rem;
+  border-radius: 999px;
+  border: none;
+  background: linear-gradient(135deg, #47c0ff, #877aff);
+  color: white;
+  cursor: pointer;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  box-shadow: 0 10px 30px rgba(71, 192, 255, 0.45);
+}
+
+#startButton:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 34px rgba(71, 192, 255, 0.6);
+}
+
+#toast {
+  position: absolute;
+  bottom: 3rem;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  padding: 0.75rem 1.5rem;
+  border-radius: 12px;
+  background: rgba(16, 30, 59, 0.9);
+  color: #fff;
+  font-weight: 600;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+#toast.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
