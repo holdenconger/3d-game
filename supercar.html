@@ -218,7 +218,7 @@
       let rpm = 0;
       let nitroActive = false;
       let nitroCooldown = false;
-      let selectedCarType = null;
+      let selectedCarType = "lambo";
       let currentGear = 0;
       let wheels = [];
       let collisionObjects = [];
@@ -230,9 +230,7 @@
 
       document.querySelectorAll(".car-option").forEach((option) => {
         option.addEventListener("click", (e) => {
-          selectedCarType = e.currentTarget.dataset.car;
-          document.getElementById("car-selector").style.display = "none";
-          init();
+          selectCar(e.currentTarget.dataset.car);
         });
       });
 
@@ -248,6 +246,18 @@
       });
 
       window.addEventListener("resize", () => onWindowResize());
+
+      function selectCar(carType) {
+        selectedCarType = carType;
+        speed = 0;
+        carRotation = 0;
+        driftAngle = 0;
+        nitroActive = false;
+        nitroCooldown = false;
+        carVelocity.set(0, 0, 0);
+        document.getElementById("car-selector").style.display = "none";
+        createDetailedCar();
+      }
 
       function init() {
         collisionObjects = [];
@@ -681,6 +691,12 @@
       }
 
       function createDetailedCar() {
+        if (!scene || !selectedCarType) return;
+
+        if (car) {
+          scene.remove(car);
+        }
+
         const stats = carStats[selectedCarType];
         const carGroup = new THREE.Group();
         wheels = [];
@@ -1012,6 +1028,7 @@
         }
       }
 
+      init();
       animate();
     </script>
   </body>
