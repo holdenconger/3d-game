@@ -1,7 +1,7 @@
 // School Computer 3D Driving Game
-// Runs in a browser (Three.js via CDN).
+// Runs in a browser (Three.js vendored for offline use).
 
-import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
+import * as THREE from "../vendor/three.module.js";
 
 const canvas = /** @type {HTMLCanvasElement} */ (document.getElementById("game"));
 const speedEl = document.getElementById("speed");
@@ -493,12 +493,5 @@ car.position.set(carState.pos.x, 0, carState.pos.z);
 car.rotation.y = carState.yaw;
 statusEl.textContent = "Press Start";
 
-// Helpful error message if Three.js can't load
-window.addEventListener("error", (e) => {
-  const msg = String(e?.message || "");
-  if (msg.includes("Failed to fetch dynamically imported module") || msg.includes("three.module.js")) {
-    statusEl.textContent = "Three.js failed to load (needs internet or local copy)";
-    setOverlayVisible(true);
-  }
-});
+// If you still get a blank page on school devices, use a local server (README).
 

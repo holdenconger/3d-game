@@ -33,4 +33,8 @@ Some browsers block `type="module"` scripts when opened as a file. If you see a 
 
 ## Notes
 
-- This uses Three.js from a CDN. If your school computer has **no internet**, I can switch it to a fully offline version by bundling Three.js into the repo.
+- This repo includes a local copy of Three.js in `vendor/`, so it can run **offline**.
+- If you’re not allowed to run `python3`, try one of these instead:
+  - **VS Code**: install/enable the “Live Server” extension and click “Go Live”
+  - **Node.js**: `npx serve .` (or `npx http-server .`)
+  - **Chromebook / very locked down**: you may need a teacher/admin to allow running a local server
