@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>School Computer 3D Driving Game</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="hud">
+      <div class="row">
+        <div class="title">3D Driving Game</div>
+        <div class="pill" id="speed">0 km/h</div>
+        <div class="pill" id="status">Ready</div>
+      </div>
+      <div class="row">
+        <div class="hint">
+          <b>Controls:</b> WASD / Arrow keys (drive), Space (handbrake), R (reset), H (help), M (mute)
+        </div>
+      </div>
+    </div>
+
+    <div id="overlay" class="overlay">
+      <div class="card">
+        <h1>School Computer 3D Driving Game</h1>
+        <p>
+          Drive the car around the track. Avoid the cones and don't leave the play area.
+        </p>
+        <ul>
+          <li><b>W / ↑</b>: accelerate</li>
+          <li><b>S / ↓</b>: brake / reverse</li>
+          <li><b>A / ←</b>: steer left</li>
+          <li><b>D / →</b>: steer right</li>
+          <li><b>Space</b>: handbrake (drift)</li>
+          <li><b>R</b>: reset car</li>
+          <li><b>H</b>: toggle help</li>
+          <li><b>M</b>: mute/unmute</li>
+        </ul>
+        <div class="actions">
+          <button id="startBtn">Start</button>
+          <button id="helpBtn">Hide</button>
+        </div>
+        <div class="small">
+          Tip: if it loads as a blank page, run a local server (see README).
+        </div>
+      </div>
+    </div>
+
+    <canvas id="game"></canvas>
+
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
