@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sandbox Builders 3D</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="viewport" aria-label="3D sandbox viewport"></div>
+
+    <aside id="ui">
+      <header class="panel">
+        <p class="eyebrow">Sandbox Builders 3D</p>
+        <h1>Build houses. Launch stuff. Experiment.</h1>
+        <p class="subtle">
+          Place blocks on the grid, stack walls, add a roof, then drop props to
+          test stability. Boosters push nearby objects upward.
+        </p>
+      </header>
+
+      <section class="panel">
+        <h2>Blocks</h2>
+        <div class="tool-grid" id="block-palette">
+          <button class="tool active" data-block="wood">Wood</button>
+          <button class="tool" data-block="stone">Stone</button>
+          <button class="tool" data-block="glass">Glass</button>
+          <button class="tool" data-block="metal">Metal</button>
+          <button class="tool" data-block="roof">Roof</button>
+          <button class="tool" data-block="booster">Booster</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Props</h2>
+        <div class="tool-grid">
+          <button class="tool alt" id="spawn-crate">Spawn Crate</button>
+          <button class="tool alt" id="spawn-ball">Spawn Ball</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>World Controls</h2>
+        <label class="slider">
+          Booster Power
+          <input id="booster-power" type="range" min="4" max="24" value="12" />
+        </label>
+        <label class="slider">
+          Gravity
+          <input id="gravity" type="range" min="3" max="18" value="10" />
+        </label>
+        <div class="tool-grid">
+          <button class="tool alt" id="reset-world">Reset World</button>
+          <button class="tool alt" id="clear-props">Clear Props</button>
+        </div>
+      </section>
+
+      <section class="panel tips">
+        <h2>Controls</h2>
+        <ul>
+          <li><strong>Left click</strong> to place a block.</li>
+          <li><strong>Right click</strong> to remove a block.</li>
+          <li><strong>R</strong> rotates the preview 90 deg.</li>
+          <li><strong>Drag</strong> to orbit, scroll to zoom.</li>
+          <li><strong>Shift</strong> while placing snaps to larger grid.</li>
+        </ul>
+      </section>
+    </aside>
+
+    <div id="hud">
+      <span id="selected-block">Wood</span>
+      <span id="status">Place blocks to start building.</span>
+    </div>
+
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
