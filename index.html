@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Escape Sphere 3D</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="loader" class="loader" aria-live="polite">
+      <div class="loader-card">
+        <p class="eyebrow">Loading</p>
+        <h1>Escape Sphere 3D</h1>
+        <p class="subtle">
+          Growing the ball unlocks the exit. Roll carefully.
+        </p>
+        <div class="loader-bar"><span></span></div>
+        <p class="loader-percent">0%</p>
+      </div>
+    </div>
+
+    <div id="viewport" aria-label="3D escape arena"></div>
+
+    <aside id="ui">
+      <header class="panel">
+        <p class="eyebrow">Objective</p>
+        <h2>Escape the ring</h2>
+        <p class="subtle">
+          Collect growth pads to enlarge your ball and unlock the exit gate.
+          Roll out to win.
+        </p>
+      </header>
+
+      <section class="panel">
+        <h2>Power-ups</h2>
+        <ul class="list">
+          <li><span class="dot grow"></span>Growth pads add size.</li>
+          <li><span class="dot mega"></span>Mega pads add more size.</li>
+          <li><span class="dot gate"></span>Exit gate opens at size 0.90.</li>
+        </ul>
+      </section>
+
+      <section class="panel">
+        <h2>Controls</h2>
+        <ul class="list">
+          <li><strong>WASD</strong> or <strong>Arrow keys</strong> to roll.</li>
+          <li><strong>Space</strong> to hop.</li>
+          <li><strong>Drag</strong> to orbit, scroll to zoom.</li>
+        </ul>
+      </section>
+
+      <section class="panel">
+        <h2>Run</h2>
+        <div class="tool-grid">
+          <button class="tool alt" id="reset-run">Reset Ball</button>
+          <button class="tool alt" id="reset-world">Reset Arena</button>
+        </div>
+      </section>
+    </aside>
+
+    <div id="hud">
+      <div class="stat">
+        <span>Size</span>
+        <strong id="size-readout">0.45</strong>
+      </div>
+      <div class="stat">
+        <span>Gate</span>
+        <strong id="gate-readout" data-state="locked">Locked</strong>
+      </div>
+      <div class="stat">
+        <span>Status</span>
+        <strong id="status">Grow to unlock the exit.</strong>
+      </div>
+    </div>
+
+    <div id="win" class="overlay" aria-live="polite">
+      <div class="panel win-panel">
+        <p class="eyebrow">Victory</p>
+        <h2>Escaped the ring!</h2>
+        <p class="subtle">Reset to try a faster run.</p>
+        <button class="tool" id="play-again">Play Again</button>
+      </div>
+    </div>
+
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
