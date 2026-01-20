@@ -4,36 +4,28 @@ import * as CANNON from "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cann
 
 const viewport = document.getElementById("viewport");
 const statusLabel = document.getElementById("status");
-const selectedLabel = document.getElementById("selected-block");
-const boosterSlider = document.getElementById("booster-power");
-const gravitySlider = document.getElementById("gravity");
+const sizeReadout = document.getElementById("size-readout");
+const gateReadout = document.getElementById("gate-readout");
+const resetRunBtn = document.getElementById("reset-run");
+const resetWorldBtn = document.getElementById("reset-world");
+const playAgainBtn = document.getElementById("play-again");
+const winOverlay = document.getElementById("win");
 
-const blockButtons = [...document.querySelectorAll("[data-block]")];
-const spawnCrateBtn = document.getElementById("spawn-crate");
-const spawnBallBtn = document.getElementById("spawn-ball");
-const resetBtn = document.getElementById("reset-world");
-const clearPropsBtn = document.getElementById("clear-props");
-
-const blockLabels = {
-  wood: "Wood",
-  stone: "Stone",
-  glass: "Glass",
-  metal: "Metal",
-  roof: "Roof",
-  booster: "Booster",
-};
+const loader = document.getElementById("loader");
+const loaderBar = loader.querySelector(".loader-bar span");
+const loaderPercent = loader.querySelector(".loader-percent");
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0b1020);
-scene.fog = new THREE.Fog(0x0b1020, 35, 160);
+scene.fog = new THREE.Fog(0x0b1020, 28, 90);
 
 const camera = new THREE.PerspectiveCamera(
   60,
   window.innerWidth / window.innerHeight,
   0.1,
-  500
+  200
 );
-camera.position.set(16, 16, 18);
+camera.position.set(12, 10, 12);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -45,43 +37,28 @@ viewport.appendChild(renderer.domElement);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
-controls.target.set(0, 5, 0);
-controls.maxPolarAngle = Math.PI * 0.48;
+controls.enablePan = false;
 controls.minDistance = 6;
-controls.maxDistance = 120;
+controls.maxDistance = 40;
+controls.maxPolarAngle = Math.PI * 0.48;
 
-const hemiLight = new THREE.HemisphereLight(0x9ec9ff, 0x1a1f30, 0.75);
+const hemiLight = new THREE.HemisphereLight(0xa0c4ff, 0x16202f, 0.7);
 scene.add(hemiLight);
 
-const sunLight = new THREE.DirectionalLight(0xffffff, 1.1);
-sunLight.position.set(24, 40, 18);
+const sunLight = new THREE.DirectionalLight(0xffffff, 1);
+sunLight.position.set(16, 25, 12);
 sunLight.castShadow = true;
 sunLight.shadow.mapSize.set(2048, 2048);
-sunLight.shadow.camera.near = 5;
-sunLight.shadow.camera.far = 120;
-sunLight.shadow.camera.left = -60;
-sunLight.shadow.camera.right = 60;
-sunLight.shadow.camera.top = 60;
-sunLight.shadow.camera.bottom = -60;
+sunLight.shadow.camera.near = 4;
+sunLight.shadow.camera.far = 80;
+sunLight.shadow.camera.left = -40;
+sunLight.shadow.camera.right = 40;
+sunLight.shadow.camera.top = 40;
+sunLight.shadow.camera.bottom = -40;
 scene.add(sunLight);
 
-const groundGeometry = new THREE.BoxGeometry(140, 1, 140);
-const groundMaterial = new THREE.MeshStandardMaterial({
-  color: 0x1b2233,
-  roughness: 0.85,
-});
-const groundMesh = new THREE.Mesh(groundGeometry, groundMaterial);
-groundMesh.position.set(0, -0.5, 0);
-groundMesh.receiveShadow = true;
-groundMesh.userData.isGround = true;
-scene.add(groundMesh);
-
-const gridHelper = new THREE.GridHelper(140, 140, 0x303a52, 0x1a2234);
-gridHelper.position.y = 0.001;
-scene.add(gridHelper);
-
 const world = new CANNON.World({
-  gravity: new CANNON.Vec3(0, -10, 0),
+  gravity: new CANNON.Vec3(0, -9.82, 0),
 });
 world.allowSleep = true;
 world.broadphase = new CANNON.SAPBroadphase(world);
@@ -92,434 +69,423 @@ world.defaultContactMaterial = new CANNON.ContactMaterial(
   defaultMaterial,
   {
     friction: 0.45,
-    restitution: 0.15,
+    restitution: 0.1,
   }
 );
 
+const arenaRadius = 8;
+const wallHeight = 2.4;
+const wallThickness = 0.65;
+const wallSegments = 36;
+const gateUnlockSize = 0.9;
+
+const floorGeometry = new THREE.CircleGeometry(26, 64);
+const floorMaterial = new THREE.MeshStandardMaterial({
+  color: 0x141b2b,
+  roughness: 0.85,
+});
+const floorMesh = new THREE.Mesh(floorGeometry, floorMaterial);
+floorMesh.rotation.x = -Math.PI / 2;
+floorMesh.receiveShadow = true;
+scene.add(floorMesh);
+
+const ringGeometry = new THREE.RingGeometry(arenaRadius - 0.08, arenaRadius + 0.08, 64);
+const ringMaterial = new THREE.MeshStandardMaterial({
+  color: 0x1f2a42,
+  roughness: 0.6,
+  emissive: 0x203760,
+  emissiveIntensity: 0.35,
+  side: THREE.DoubleSide,
+});
+const ringMesh = new THREE.Mesh(ringGeometry, ringMaterial);
+ringMesh.rotation.x = -Math.PI / 2;
+ringMesh.position.y = 0.01;
+scene.add(ringMesh);
+
 const groundBody = new CANNON.Body({
   mass: 0,
-  shape: new CANNON.Box(new CANNON.Vec3(70, 0.5, 70)),
+  shape: new CANNON.Plane(),
   material: defaultMaterial,
 });
-groundBody.position.copy(groundMesh.position);
+groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
 world.addBody(groundBody);
 
-const roofGeometry = createRoofGeometry();
-const blockGeometries = {
-  wood: new THREE.BoxGeometry(1, 1, 1),
-  stone: new THREE.BoxGeometry(1, 1, 1),
-  glass: new THREE.BoxGeometry(1, 1, 1),
-  metal: new THREE.BoxGeometry(1, 1, 1),
-  roof: roofGeometry,
-  booster: new THREE.BoxGeometry(1, 1, 1),
-};
+const wallMeshes = [];
+const wallBodies = [];
 
-const blockMaterials = {
-  wood: new THREE.MeshStandardMaterial({
-    color: "#9c6b36",
-    roughness: 0.8,
-    metalness: 0.1,
-  }),
-  stone: new THREE.MeshStandardMaterial({
-    color: "#7d828a",
-    roughness: 0.9,
-  }),
-  glass: new THREE.MeshStandardMaterial({
-    color: "#9bdcf8",
-    roughness: 0.1,
-    metalness: 0.05,
-    transparent: true,
-    opacity: 0.5,
-  }),
-  metal: new THREE.MeshStandardMaterial({
-    color: "#8d97a6",
-    roughness: 0.3,
-    metalness: 0.6,
-  }),
-  roof: new THREE.MeshStandardMaterial({
-    color: "#b7483f",
-    roughness: 0.75,
-  }),
-  booster: new THREE.MeshStandardMaterial({
-    color: "#4ff0b7",
-    roughness: 0.2,
-    metalness: 0.3,
-    emissive: "#2fbf93",
-    emissiveIntensity: 0.8,
-  }),
-};
+let gateBody = null;
+let gateMesh = null;
+let gateOpen = false;
 
-const ghostMaterial = new THREE.MeshStandardMaterial({
-  color: "#ffffff",
-  transparent: true,
-  opacity: 0.35,
-  roughness: 0.5,
-});
+const segmentLength = (2 * Math.PI * arenaRadius) / wallSegments;
+const segmentWidth = segmentLength * 1.02;
 
-const ghostMesh = new THREE.Mesh(blockGeometries.wood, ghostMaterial);
-ghostMesh.castShadow = false;
-ghostMesh.visible = false;
-scene.add(ghostMesh);
-
-const blockInstances = new Map();
-const blockMeshes = [];
-const boosterKeys = new Set();
-
-const dynamicObjects = [];
-
-const raycaster = new THREE.Raycaster();
-const pointer = new THREE.Vector2(0.2, 0.1);
-let pointerInside = false;
-let pointerDown = null;
-let isShiftDown = false;
-
-let currentBlock = "wood";
-let rotationIndex = 0;
-let statusMessage = "Place blocks to start building.";
-let placementMessage = "Move the cursor over the build area.";
-
-function renderStatus() {
-  statusLabel.textContent = `${placementMessage} | ${statusMessage} | Blocks: ${
-    blockInstances.size
-  } | Props: ${dynamicObjects.length}`;
-}
-
-function setStatus(text) {
-  statusMessage = text;
-}
-
-function setPlacement(text) {
-  placementMessage = text;
-}
-
-function gridKey(grid) {
-  return `${grid.x},${grid.y},${grid.z}`;
-}
-
-function gridToWorld(grid) {
-  return new THREE.Vector3(grid.x + 0.5, grid.y + 0.5, grid.z + 0.5);
-}
-
-function createBlockMesh(type) {
-  const geometry = blockGeometries[type] || blockGeometries.wood;
-  const material = blockMaterials[type] || blockMaterials.wood;
-  const mesh = new THREE.Mesh(geometry, material);
+for (let i = 0; i < wallSegments; i += 1) {
+  const angle = (i / wallSegments) * Math.PI * 2;
+  const isGate = i === 0;
+  const mesh = createWallSegment(segmentWidth, isGate);
+  const body = createWallBody(segmentWidth, isGate);
+  const x = Math.cos(angle) * arenaRadius;
+  const z = Math.sin(angle) * arenaRadius;
+  mesh.position.set(x, wallHeight / 2, z);
+  mesh.rotation.y = -angle;
   mesh.castShadow = true;
   mesh.receiveShadow = true;
-  mesh.userData.isBlock = true;
-  mesh.userData.blockType = type;
-  return mesh;
-}
-
-function placeBlock(grid, type, rotation) {
-  const key = gridKey(grid);
-  if (blockInstances.has(key)) {
-    setStatus("Space occupied.");
-    return false;
-  }
-
-  const mesh = createBlockMesh(type);
-  mesh.position.copy(gridToWorld(grid));
-  mesh.rotation.y = rotation * (Math.PI / 2);
-  mesh.userData.gridKey = key;
   scene.add(mesh);
-  blockMeshes.push(mesh);
 
-  const body = new CANNON.Body({
-    mass: 0,
-    material: defaultMaterial,
-  });
-  const shape = new CANNON.Box(new CANNON.Vec3(0.5, 0.5, 0.5));
-  body.addShape(shape);
-  body.position.set(mesh.position.x, mesh.position.y, mesh.position.z);
-  body.quaternion.setFromEuler(0, mesh.rotation.y, 0);
+  body.position.set(x, wallHeight / 2, z);
+  body.quaternion.setFromEuler(0, -angle, 0);
   world.addBody(body);
 
-  blockInstances.set(key, { mesh, body, type });
-  if (type === "booster") {
-    boosterKeys.add(key);
-  }
-  setStatus("Block placed.");
-  return true;
-}
-
-function removeBlock(mesh) {
-  if (!mesh || !mesh.userData.gridKey) {
-    return;
-  }
-  const key = mesh.userData.gridKey;
-  const block = blockInstances.get(key);
-  if (!block) {
-    return;
-  }
-  scene.remove(block.mesh);
-  world.removeBody(block.body);
-  const index = blockMeshes.indexOf(block.mesh);
-  if (index >= 0) {
-    blockMeshes.splice(index, 1);
-  }
-  blockInstances.delete(key);
-  boosterKeys.delete(key);
-  setStatus("Block removed.");
-}
-
-function clearDynamicObjects() {
-  dynamicObjects.forEach(({ mesh, body }) => {
-    scene.remove(mesh);
-    world.removeBody(body);
-  });
-  dynamicObjects.length = 0;
-  setStatus("Props cleared.");
-}
-
-function resetWorld() {
-  blockInstances.forEach((block) => {
-    scene.remove(block.mesh);
-    world.removeBody(block.body);
-  });
-  blockInstances.clear();
-  boosterKeys.clear();
-  blockMeshes.length = 0;
-  clearDynamicObjects();
-  setStatus("World reset.");
-}
-
-function spawnDynamic(kind) {
-  const direction = new THREE.Vector3();
-  camera.getWorldDirection(direction);
-  const spawnPos = camera.position
-    .clone()
-    .add(direction.multiplyScalar(8));
-  spawnPos.y = Math.max(spawnPos.y, 8);
-
-  if (kind === "ball") {
-    const radius = 0.45;
-    const mesh = new THREE.Mesh(
-      new THREE.SphereGeometry(radius, 32, 24),
-      new THREE.MeshStandardMaterial({
-        color: "#d7f3ff",
-        roughness: 0.35,
-        metalness: 0.2,
-      })
-    );
-    mesh.castShadow = true;
-    scene.add(mesh);
-
-    const body = new CANNON.Body({
-      mass: 1.2,
-      shape: new CANNON.Sphere(radius),
-      material: defaultMaterial,
-    });
-    body.position.set(spawnPos.x, spawnPos.y, spawnPos.z);
-    world.addBody(body);
-    dynamicObjects.push({ mesh, body });
+  if (isGate) {
+    gateBody = body;
+    gateMesh = mesh;
   } else {
-    const size = 0.8;
-    const mesh = new THREE.Mesh(
-      new THREE.BoxGeometry(size, size, size),
-      new THREE.MeshStandardMaterial({
-        color: "#f4b860",
-        roughness: 0.7,
-      })
-    );
-    mesh.castShadow = true;
-    scene.add(mesh);
-
-    const body = new CANNON.Body({
-      mass: 1.6,
-      shape: new CANNON.Box(new CANNON.Vec3(size / 2, size / 2, size / 2)),
-      material: defaultMaterial,
-    });
-    body.position.set(spawnPos.x, spawnPos.y, spawnPos.z);
-    world.addBody(body);
-    dynamicObjects.push({ mesh, body });
+    wallMeshes.push(mesh);
+    wallBodies.push(body);
   }
-
-  setStatus("Prop spawned.");
 }
 
-function getPlacementHit() {
-  const objects = [groundMesh, ...blockMeshes];
-  raycaster.setFromCamera(pointer, camera);
-  const hits = raycaster.intersectObjects(objects, true);
-  if (!hits.length) {
-    return null;
+const exitBeacon = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.2, 0.2, 3.2, 16),
+  new THREE.MeshStandardMaterial({
+    color: 0x6b8cff,
+    emissive: 0x6b8cff,
+    emissiveIntensity: 0.8,
+  })
+);
+exitBeacon.position.set(arenaRadius + 0.4, wallHeight / 2 + 0.8, 0);
+exitBeacon.castShadow = true;
+scene.add(exitBeacon);
+
+const ballBaseRadius = 0.45;
+let ballRadius = ballBaseRadius;
+const ballMesh = new THREE.Mesh(
+  new THREE.SphereGeometry(ballBaseRadius, 32, 24),
+  new THREE.MeshStandardMaterial({
+    color: 0x8fe9ff,
+    roughness: 0.25,
+    metalness: 0.2,
+  })
+);
+ballMesh.castShadow = true;
+ballMesh.receiveShadow = true;
+scene.add(ballMesh);
+
+const ballBody = new CANNON.Body({
+  mass: 1.2,
+  material: defaultMaterial,
+  shape: new CANNON.Sphere(ballRadius),
+});
+ballBody.position.set(0, ballRadius + 0.2, 0);
+ballBody.linearDamping = 0.3;
+ballBody.angularDamping = 0.4;
+world.addBody(ballBody);
+controls.target.copy(ballMesh.position);
+controls.update();
+
+const growthPads = [];
+const padPulseSpeed = 1.4;
+const padFloatSpeed = 1.1;
+
+addGrowthPad(new THREE.Vector3(2.5, 0.05, -2.5), 0.12, "grow");
+addGrowthPad(new THREE.Vector3(-3.2, 0.05, 1.8), 0.12, "grow");
+addGrowthPad(new THREE.Vector3(1.2, 0.05, 3.4), 0.12, "grow");
+addGrowthPad(new THREE.Vector3(-2.8, 0.05, -3.4), 0.12, "grow");
+addGrowthPad(new THREE.Vector3(5.4, 0.05, 0.4), 0.2, "mega");
+addGrowthPad(new THREE.Vector3(-5.2, 0.05, -0.6), 0.2, "mega");
+
+const keys = {
+  forward: false,
+  backward: false,
+  left: false,
+  right: false,
+};
+let wantsJump = false;
+let hasEscaped = false;
+
+let loaderProgress = 0;
+let sceneReady = false;
+let loaderFinished = false;
+
+function setStatus(text) {
+  statusLabel.textContent = text;
+}
+
+function updateReadouts() {
+  sizeReadout.textContent = ballRadius.toFixed(2);
+  gateReadout.textContent = gateOpen ? "Open" : "Locked";
+  gateReadout.dataset.state = gateOpen ? "open" : "locked";
+}
+
+function createWallSegment(width, isGate) {
+  const geometry = new THREE.BoxGeometry(width, wallHeight, wallThickness);
+  const material = new THREE.MeshStandardMaterial({
+    color: isGate ? 0x5b6ea8 : 0x2a3246,
+    roughness: 0.7,
+    metalness: 0.1,
+    emissive: isGate ? 0x1b2a5a : 0x000000,
+    emissiveIntensity: isGate ? 0.45 : 0,
+  });
+  return new THREE.Mesh(geometry, material);
+}
+
+function createWallBody(width, isGate) {
+  return new CANNON.Body({
+    mass: 0,
+    material: defaultMaterial,
+    shape: new CANNON.Box(new CANNON.Vec3(width / 2, wallHeight / 2, wallThickness / 2)),
+    collisionFilterGroup: isGate ? 2 : 1,
+  });
+}
+
+function addGrowthPad(position, amount, type) {
+  const padGeometry = new THREE.CylinderGeometry(0.7, 0.7, 0.1, 24);
+  const padMaterial = new THREE.MeshStandardMaterial({
+    color: type === "mega" ? 0xffc57a : 0x70ffc9,
+    roughness: 0.3,
+    emissive: type === "mega" ? 0xffc57a : 0x70ffc9,
+    emissiveIntensity: 0.6,
+  });
+  const mesh = new THREE.Mesh(padGeometry, padMaterial);
+  mesh.position.copy(position);
+  mesh.castShadow = true;
+  scene.add(mesh);
+  growthPads.push({
+    mesh,
+    amount,
+    type,
+    used: false,
+    baseScale: 1,
+  });
+}
+
+function setBallSize(radius) {
+  ballRadius = Math.max(0.3, radius);
+  const scale = ballRadius / ballBaseRadius;
+  ballMesh.scale.setScalar(scale);
+  ballBody.shapes.length = 0;
+  ballBody.shapeOffsets.length = 0;
+  ballBody.shapeOrientations.length = 0;
+  ballBody.addShape(new CANNON.Sphere(ballRadius));
+  ballBody.updateMassProperties();
+  ballBody.position.y = Math.max(ballBody.position.y, ballRadius + 0.05);
+  updateReadouts();
+}
+
+function growBall(amount) {
+  setBallSize(Math.min(ballRadius + amount, 1.4));
+  setStatus("Growth pad activated!");
+  if (!gateOpen && ballRadius >= gateUnlockSize) {
+    openGate();
+  }
+}
+
+function openGate() {
+  gateOpen = true;
+  if (gateMesh && gateBody) {
+    scene.remove(gateMesh);
+    world.removeBody(gateBody);
+    gateMesh = null;
+    gateBody = null;
+  }
+  exitBeacon.material.emissiveIntensity = 1.3;
+  setStatus("Exit gate unlocked. Escape the ring!");
+  updateReadouts();
+}
+
+function resetBall() {
+  ballBody.position.set(0, ballRadius + 0.2, 0);
+  ballBody.velocity.set(0, 0, 0);
+  ballBody.angularVelocity.set(0, 0, 0);
+  hasEscaped = false;
+  winOverlay.classList.remove("show");
+  setStatus("Roll to a growth pad.");
+}
+
+function resetArena() {
+  setBallSize(ballBaseRadius);
+  resetBall();
+  gateOpen = false;
+  updateReadouts();
+  if (!gateMesh) {
+    const mesh = createWallSegment(segmentWidth, true);
+    const body = createWallBody(segmentWidth, true);
+    mesh.position.set(arenaRadius, wallHeight / 2, 0);
+    mesh.rotation.y = 0;
+    scene.add(mesh);
+    world.addBody(body);
+    body.position.set(arenaRadius, wallHeight / 2, 0);
+    gateMesh = mesh;
+    gateBody = body;
+  }
+  exitBeacon.material.emissiveIntensity = 0.8;
+  growthPads.forEach((pad) => {
+    pad.used = false;
+    pad.mesh.material.opacity = 1;
+    pad.mesh.material.transparent = false;
+  });
+  setStatus("Arena reset. Grab the pads.");
+}
+
+function applyControls() {
+  const forward = new THREE.Vector3();
+  camera.getWorldDirection(forward);
+  forward.y = 0;
+  forward.normalize();
+
+  const right = new THREE.Vector3()
+    .crossVectors(forward, new THREE.Vector3(0, 1, 0))
+    .normalize();
+
+  const move = new THREE.Vector3();
+  if (keys.forward) {
+    move.add(forward);
+  }
+  if (keys.backward) {
+    move.sub(forward);
+  }
+  if (keys.left) {
+    move.sub(right);
+  }
+  if (keys.right) {
+    move.add(right);
   }
 
-  for (const hit of hits) {
-    const normal =
-      hit.face?.normal
-        ?.clone()
-        .applyMatrix3(
-          new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld)
-        )
-        .normalize() || new THREE.Vector3(0, 1, 0);
-    if (hit.object.userData.isGround && normal.y < 0.5) {
-      continue;
+  if (move.lengthSq() > 0) {
+    move.normalize();
+    const drive = 26 + ballRadius * 8;
+    const force = new CANNON.Vec3(
+      move.x * drive,
+      0,
+      move.z * drive
+    );
+    ballBody.applyForce(force, ballBody.position);
+  }
+
+  if (wantsJump) {
+    wantsJump = false;
+    const nearGround = ballBody.position.y <= ballRadius + 0.08;
+    if (nearGround) {
+      ballBody.applyImpulse(
+        new CANNON.Vec3(0, ballBody.mass * 3.8, 0),
+        ballBody.position
+      );
     }
-    const step = isShiftDown ? 2 : 1;
-    const snapped = new THREE.Vector3(
-      Math.floor((hit.point.x + normal.x * 0.5) / step) * step,
-      Math.floor((hit.point.y + normal.y * 0.5) / step) * step,
-      Math.floor((hit.point.z + normal.z * 0.5) / step) * step
-    );
-    snapped.y = Math.max(snapped.y, 0);
-    return { grid: snapped, normal, object: hit.object };
   }
-  return null;
 }
 
-function updateGhost() {
-  if (!pointerInside) {
-    ghostMesh.visible = false;
-    setPlacement("Move the cursor over the build area.");
-    return null;
-  }
-
-  const hit = getPlacementHit();
-  if (!hit) {
-    ghostMesh.visible = false;
-    setPlacement("Move the cursor over the build area.");
-    return null;
-  }
-
-  const key = gridKey(hit.grid);
-  const occupied = blockInstances.has(key);
-  const blockMaterial = blockMaterials[currentBlock];
-  ghostMesh.geometry = blockGeometries[currentBlock] || blockGeometries.wood;
-  ghostMesh.position.copy(gridToWorld(hit.grid));
-  ghostMesh.rotation.y = rotationIndex * (Math.PI / 2);
-  ghostMesh.visible = true;
-  if (occupied) {
-    ghostMaterial.color.set("#ff6b6b");
-    ghostMaterial.opacity = 0.2;
-    setPlacement("Space occupied.");
-  } else {
-    ghostMaterial.color.copy(blockMaterial.color);
-    ghostMaterial.opacity = 0.35;
-    setPlacement("Ready to place.");
-  }
-  return { grid: hit.grid, key, occupied };
+function updatePads(time) {
+  growthPads.forEach((pad, index) => {
+    const phase = time * 0.001 * padFloatSpeed + index;
+    const pulse = 1 + Math.sin(phase * padPulseSpeed) * 0.06;
+    pad.mesh.scale.set(pulse, pulse, pulse);
+    pad.mesh.position.y = 0.05 + Math.sin(phase) * 0.05;
+  });
 }
 
-function applyBoosters() {
-  if (!boosterKeys.size || !dynamicObjects.length) {
-    return;
-  }
-  const range = 3.2;
-  const power = Number(boosterSlider.value);
-  boosterKeys.forEach((key) => {
-    const booster = blockInstances.get(key);
-    if (!booster) {
+function checkGrowthPads() {
+  const ballPos = ballMesh.position;
+  growthPads.forEach((pad) => {
+    if (pad.used) {
       return;
     }
-    const origin = booster.body.position;
-    dynamicObjects.forEach(({ body }) => {
-      const dx = body.position.x - origin.x;
-      const dy = body.position.y - origin.y;
-      const dz = body.position.z - origin.z;
-      const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-      if (distance < range) {
-        const strength = power * (1 - distance / range);
-        const force = strength * body.mass;
-        body.applyForce(new CANNON.Vec3(0, force, 0), body.position);
-      }
-    });
+    const distance = ballPos.distanceTo(pad.mesh.position);
+    if (distance < ballRadius + 0.55) {
+      pad.used = true;
+      pad.mesh.material.transparent = true;
+      pad.mesh.material.opacity = 0.35;
+      growBall(pad.amount);
+    }
   });
 }
 
-function updateDynamicMeshes() {
-  dynamicObjects.forEach(({ mesh, body }) => {
-    mesh.position.copy(body.position);
-    mesh.quaternion.copy(body.quaternion);
-  });
+function updateCamera() {
+  controls.target.lerp(ballMesh.position, 0.18);
+  controls.update();
 }
 
-function updateBlockSelection(type) {
-  currentBlock = type;
-  selectedLabel.textContent = blockLabels[type] || "Block";
-  blockButtons.forEach((button) => {
-    button.classList.toggle("active", button.dataset.block === type);
-  });
-  setStatus(`Selected ${blockLabels[type] || "block"}.`);
-}
-
-blockButtons.forEach((button) => {
-  button.addEventListener("click", () => {
-    updateBlockSelection(button.dataset.block);
-  });
-});
-
-spawnCrateBtn.addEventListener("click", () => spawnDynamic("crate"));
-spawnBallBtn.addEventListener("click", () => spawnDynamic("ball"));
-resetBtn.addEventListener("click", resetWorld);
-clearPropsBtn.addEventListener("click", clearDynamicObjects);
-
-gravitySlider.addEventListener("input", (event) => {
-  const value = Number(event.target.value);
-  world.gravity.set(0, -value, 0);
-});
-
-renderer.domElement.addEventListener("pointermove", (event) => {
-  const rect = renderer.domElement.getBoundingClientRect();
-  pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-  pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-  pointerInside = true;
-});
-
-renderer.domElement.addEventListener("pointerleave", () => {
-  pointerInside = false;
-});
-
-renderer.domElement.addEventListener("pointerdown", (event) => {
-  pointerDown = {
-    x: event.clientX,
-    y: event.clientY,
-    button: event.button,
-  };
-});
-
-renderer.domElement.addEventListener("pointerup", (event) => {
-  if (!pointerDown) {
+function checkEscape() {
+  if (!gateOpen || hasEscaped) {
     return;
   }
-  const dx = event.clientX - pointerDown.x;
-  const dy = event.clientY - pointerDown.y;
-  const distance = Math.hypot(dx, dy);
-  if (distance < 4) {
-    const placement = updateGhost();
-    if (event.button === 0 && placement && !placement.occupied) {
-      placeBlock(placement.grid, currentBlock, rotationIndex);
-    } else if (event.button === 2 && placement && blockMeshes.length) {
-      const hit = getPlacementHit();
-      if (hit && hit.object && hit.object.userData.isBlock) {
-        removeBlock(hit.object);
-      }
-    }
+  const distance = Math.hypot(ballBody.position.x, ballBody.position.z);
+  if (distance > arenaRadius + 3) {
+    hasEscaped = true;
+    winOverlay.classList.add("show");
+    setStatus("Escaped! Reset to run again.");
   }
-  pointerDown = null;
-});
+}
 
-window.addEventListener("contextmenu", (event) => {
-  event.preventDefault();
-});
+function updateLoader(delta) {
+  const target = sceneReady ? 1 : 0.85;
+  const speed = sceneReady ? 1.4 : 0.6;
+  loaderProgress += (target - loaderProgress) * delta * speed;
+  loaderProgress = Math.min(loaderProgress, 1);
+  const percent = Math.round(loaderProgress * 100);
+  loaderBar.style.width = `${percent}%`;
+  loaderPercent.textContent = `${percent}%`;
+  if (sceneReady && !loaderFinished && loaderProgress > 0.99) {
+    document.body.classList.add("loaded");
+    loaderFinished = true;
+  }
+}
+
+function updateMeshes() {
+  ballMesh.position.copy(ballBody.position);
+  ballMesh.quaternion.copy(ballBody.quaternion);
+}
+
+resetRunBtn.addEventListener("click", resetBall);
+resetWorldBtn.addEventListener("click", resetArena);
+playAgainBtn.addEventListener("click", resetArena);
 
 window.addEventListener("keydown", (event) => {
-  if (event.target.tagName === "INPUT") {
-    return;
-  }
-  if (event.key.toLowerCase() === "r") {
-    rotationIndex = (rotationIndex + 1) % 4;
-    setStatus("Rotation updated.");
-  }
-  if (event.key === "Shift") {
-    isShiftDown = true;
+  switch (event.key.toLowerCase()) {
+    case "w":
+    case "arrowup":
+      keys.forward = true;
+      break;
+    case "s":
+    case "arrowdown":
+      keys.backward = true;
+      break;
+    case "a":
+    case "arrowleft":
+      keys.left = true;
+      break;
+    case "d":
+    case "arrowright":
+      keys.right = true;
+      break;
+    case " ":
+      wantsJump = true;
+      break;
+    default:
+      break;
   }
 });
 
 window.addEventListener("keyup", (event) => {
-  if (event.key === "Shift") {
-    isShiftDown = false;
+  switch (event.key.toLowerCase()) {
+    case "w":
+    case "arrowup":
+      keys.forward = false;
+      break;
+    case "s":
+    case "arrowdown":
+      keys.backward = false;
+      break;
+    case "a":
+    case "arrowleft":
+      keys.left = false;
+      break;
+    case "d":
+    case "arrowright":
+      keys.right = false;
+      break;
+    default:
+      break;
   }
 });
 
@@ -529,42 +495,30 @@ window.addEventListener("resize", () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
+renderer.domElement.addEventListener("contextmenu", (event) => {
+  event.preventDefault();
+});
+
 let lastTime = performance.now();
 function animate(time) {
   requestAnimationFrame(animate);
-  const delta = Math.min((time - lastTime) / 1000, 0.02);
+  const delta = Math.min((time - lastTime) / 1000, 0.033);
   lastTime = time;
-  applyBoosters();
+  if (!sceneReady) {
+    sceneReady = true;
+  }
+
+  applyControls();
   world.step(1 / 60, delta, 3);
-  updateDynamicMeshes();
-  updateGhost();
-  controls.update();
+  updateMeshes();
+  updatePads(time);
+  checkGrowthPads();
+  checkEscape();
+  updateCamera();
+  updateLoader(delta);
   renderer.render(scene, camera);
-  renderStatus();
 }
 
-updateBlockSelection(currentBlock);
-renderStatus();
+setStatus("Roll to a growth pad.");
+updateReadouts();
 requestAnimationFrame(animate);
-
-function createRoofGeometry() {
-  const shape = new THREE.Shape();
-  shape.moveTo(-0.5, -0.5);
-  shape.lineTo(0.5, -0.5);
-  shape.lineTo(0, 0.5);
-  shape.lineTo(-0.5, -0.5);
-
-  const geometry = new THREE.ExtrudeGeometry(shape, {
-    depth: 1,
-    bevelEnabled: false,
-  });
-  geometry.computeBoundingBox();
-  const box = geometry.boundingBox;
-  const offsetX = -(box.max.x + box.min.x) / 2;
-  const offsetY = -(box.max.y + box.min.y) / 2;
-  const offsetZ = -(box.max.z + box.min.z) / 2;
-  geometry.translate(offsetX, offsetY, offsetZ);
-  geometry.rotateY(Math.PI / 2);
-  geometry.computeVertexNormals();
-  return geometry;
-}
