@@ -8,6 +8,8 @@ const hud = {
   hp: document.getElementById("hp"),
   combo: document.getElementById("combo"),
   dodge: document.getElementById("dodge"),
+  mats: document.getElementById("mats"),
+  build: document.getElementById("build"),
 };
 
 const overlay = document.getElementById("overlay");
@@ -51,6 +53,10 @@ const state = {
   stains: [],
   stars: [],
   structures: [],
+  materials: 0,
+  buildMode: false,
+  buildIndex: 0,
+  buildRotation: 0,
   player: null,
 };
 
@@ -66,6 +72,12 @@ const BASE_STRUCTURES = [
   { x: 171, y: 40, w: 14, h: 10, kind: "crate" },
   { x: 144, y: 128, w: 20, h: 14, kind: "crate" },
   { x: 172, y: 114, w: 16, h: 12, kind: "crate" },
+];
+
+const BUILD_PARTS = [
+  { name: "wall", w: 20, h: 6, kind: "crate", cost: 3 },
+  { name: "pillar", w: 12, h: 12, kind: "crate", cost: 2 },
+  { name: "room", w: 24, h: 18, kind: "building", cost: 6 },
 ];
 
 function circleHitsRect(cx, cy, radius, rect) {
@@ -153,6 +165,91 @@ function generateStructures() {
   state.structures = BASE_STRUCTURES.map((item) => ({ ...item }));
 }
 
+function rectsOverlap(a, b, pad = 0) {
+  return (
+    a.x < b.x + b.w + pad &&
+    a.x + a.w > b.x - pad &&
+    a.y < b.y + b.h + pad &&
+    a.y + a.h > b.y - pad
+  );
+}
+
+function getBuildPart() {
+  return BUILD_PARTS[state.buildIndex % BUILD_PARTS.length];
+}
+
+function getBuildPlacement() {
+  const part = getBuildPart();
+  let w = part.w;
+  let h = part.h;
+  if (state.buildRotation % 2 === 1) {
+    w = part.h;
+    h = part.w;
+  }
+
+  const x = clamp(Math.floor((input.mouse.x - w / 2) / 2) * 2, 1, WORLD.w - w - 1);
+  const y = clamp(Math.floor((input.mouse.y - h / 2) / 2) * 2, 1, WORLD.h - h - 1);
+  return {
+    x,
+    y,
+    w,
+    h,
+    kind: part.kind,
+  };
+}
+
+function isBuildPlacementValid(candidate) {
+  if (candidate.x < 1 || candidate.y < 1 || candidate.x + candidate.w > WORLD.w - 1 || candidate.y + candidate.h > WORLD.h - 1) {
+    return false;
+  }
+
+  for (const structure of state.structures) {
+    if (rectsOverlap(candidate, structure, 0)) {
+      return false;
+    }
+  }
+
+  if (state.player && circleHitsRect(state.player.x, state.player.y, state.player.r + 2, candidate)) {
+    return false;
+  }
+
+  for (const zombie of state.zombies) {
+    if (circleHitsRect(zombie.x, zombie.y, zombie.r + 1, candidate)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function placeBuildPart() {
+  if (!state.running || !state.buildMode) return false;
+  const part = getBuildPart();
+  const candidate = getBuildPlacement();
+  const canAfford = state.materials >= part.cost;
+  const valid = isBuildPlacementValid(candidate);
+  if (!canAfford || !valid) return false;
+
+  state.structures.push(candidate);
+  state.materials -= part.cost;
+  state.shake = Math.max(state.shake, 0.8);
+  for (let i = 0; i < 10; i += 1) {
+    state.particles.push({
+      x: candidate.x + candidate.w * 0.5,
+      y: candidate.y + candidate.h * 0.5,
+      vx: rand(-24, 24),
+      vy: rand(-24, 24),
+      life: rand(0.1, 0.22),
+      maxLife: 0.22,
+      color: "#8fe7ff",
+      size: 1,
+      gravity: 0,
+    });
+  }
+  updateHud();
+  return true;
+}
+
 function setOverlay(title, text, buttonText) {
   overlayTitle.textContent = title;
   overlayText.textContent = text;
@@ -170,12 +267,23 @@ function waveTarget(level) {
 
 function updateHud() {
   if (!state.player) return;
-  hud.score.textContent = Math.floor(state.score).toString();
-  hud.wave.textContent = state.wave.toString();
-  hud.hp.textContent = Math.max(0, Math.ceil(state.player.hp)).toString();
-  hud.combo.textContent = `x${state.combo.toFixed(1)}`;
+  if (hud.score) hud.score.textContent = Math.floor(state.score).toString();
+  if (hud.wave) hud.wave.textContent = state.wave.toString();
+  if (hud.hp) hud.hp.textContent = Math.max(0, Math.ceil(state.player.hp)).toString();
+  if (hud.combo) hud.combo.textContent = `x${state.combo.toFixed(1)}`;
   if (hud.dodge) {
     hud.dodge.textContent = `${state.player.dodgeCharges}/${state.player.maxDodgeCharges}`;
+  }
+  if (hud.mats) {
+    hud.mats.textContent = state.materials.toString();
+  }
+  if (hud.build) {
+    if (state.buildMode) {
+      const part = getBuildPart();
+      hud.build.textContent = `${part.name.toUpperCase()} $${part.cost}`;
+    } else {
+      hud.build.textContent = "FIGHT";
+    }
   }
 }
 
@@ -211,6 +319,10 @@ function resetGame() {
   state.particles = [];
   state.pickups = [];
   state.stains = [];
+  state.materials = 12;
+  state.buildMode = false;
+  state.buildIndex = 0;
+  state.buildRotation = 0;
   generateStructures();
   state.player = {
     x: WORLD.w * 0.5,
@@ -488,7 +600,7 @@ function update(dt) {
   for (const t of p.trail) t.life -= dt;
   p.trail = p.trail.filter((t) => t.life > 0);
 
-  const firing = input.mouse.down || isDown("Space");
+  const firing = isDown("Space") || (!state.buildMode && input.mouse.down);
   if (firing && p.shotCooldown <= 0) {
     fireBullet();
   }
@@ -555,6 +667,7 @@ function updateBullets(dt) {
           state.zombies.splice(z, 1);
           state.waveKilled += 1;
           state.score += Math.floor(35 * state.combo);
+          state.materials += enemy.type === "spitter" ? 2 : 1;
           state.combo = clamp(state.combo + 0.24, 1, 9.9);
           state.comboTimer = 2.35;
           state.shake = Math.max(state.shake, 2.6);
@@ -672,6 +785,7 @@ function updatePickups(dt) {
     if (Math.hypot(med.x - p.x, med.y - p.y) < med.r + p.r + 1) {
       p.hp = Math.min(p.maxHp, p.hp + 1);
       state.score += 25;
+      state.materials += 2;
       state.pickups.splice(i, 1);
       for (let c = 0; c < 10; c += 1) {
         state.particles.push({
@@ -862,6 +976,28 @@ function drawParticle(p) {
   ctx.globalAlpha = 1;
 }
 
+function drawBuildPreview() {
+  if (!state.running || !state.buildMode) return;
+  const part = getBuildPart();
+  const placement = getBuildPlacement();
+  const canAfford = state.materials >= part.cost;
+  const valid = isBuildPlacementValid(placement);
+
+  const fill = valid && canAfford ? "rgba(88, 255, 190, 0.26)" : "rgba(255, 90, 110, 0.26)";
+  const stroke = valid && canAfford ? "#6dffd2" : "#ff8ca0";
+  ctx.fillStyle = fill;
+  ctx.fillRect(placement.x, placement.y, placement.w, placement.h);
+  ctx.strokeStyle = stroke;
+  ctx.lineWidth = 1;
+  ctx.strokeRect(placement.x + 0.5, placement.y + 0.5, placement.w - 1, placement.h - 1);
+
+  ctx.fillStyle = "#dff4ff";
+  ctx.font = "6px 'Press Start 2P', monospace";
+  ctx.textAlign = "left";
+  const labelY = placement.y > 10 ? placement.y - 3 : placement.y + placement.h + 8;
+  ctx.fillText(`${part.name} $${part.cost}`, placement.x, labelY);
+}
+
 function drawCrosshair(time) {
   const x = Math.floor(input.mouse.x);
   const y = Math.floor(input.mouse.y);
@@ -913,6 +1049,7 @@ function render(time) {
   }
 
   for (const structure of state.structures) drawStructure(structure, time);
+  drawBuildPreview();
   for (const pickup of state.pickups) drawPickup(pickup, time);
 
   const mobs = [...state.zombies].sort((a, b) => a.y - b.y);
@@ -945,8 +1082,38 @@ function toCanvasCoordinates(clientX, clientY) {
 }
 
 window.addEventListener("keydown", (event) => {
-  const block = ["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "ShiftLeft", "ShiftRight"];
+  const block = [
+    "Space",
+    "ArrowUp",
+    "ArrowDown",
+    "ArrowLeft",
+    "ArrowRight",
+    "ShiftLeft",
+    "ShiftRight",
+    "KeyB",
+    "KeyQ",
+    "KeyE",
+    "KeyR",
+  ];
   if (block.includes(event.code)) event.preventDefault();
+
+  if (!event.repeat) {
+    if (event.code === "KeyB") {
+      state.buildMode = !state.buildMode;
+      input.mouse.down = false;
+      updateHud();
+    } else if (event.code === "KeyR" && state.buildMode) {
+      state.buildRotation = (state.buildRotation + 1) % 2;
+      updateHud();
+    } else if (event.code === "KeyQ" && state.buildMode) {
+      state.buildIndex = (state.buildIndex - 1 + BUILD_PARTS.length) % BUILD_PARTS.length;
+      updateHud();
+    } else if (event.code === "KeyE" && state.buildMode) {
+      state.buildIndex = (state.buildIndex + 1) % BUILD_PARTS.length;
+      updateHud();
+    }
+  }
+
   input.keys.add(event.code);
 });
 
@@ -959,10 +1126,14 @@ canvas.addEventListener("mousemove", (event) => {
 });
 
 canvas.addEventListener("mousedown", (event) => {
-  if (event.button === 0) {
-    input.mouse.down = true;
-  }
   toCanvasCoordinates(event.clientX, event.clientY);
+  if (event.button === 0) {
+    if (state.running && state.buildMode) {
+      placeBuildPart();
+    } else {
+      input.mouse.down = true;
+    }
+  }
 });
 
 window.addEventListener("mouseup", () => {
@@ -973,8 +1144,13 @@ canvas.addEventListener("touchstart", (event) => {
   event.preventDefault();
   if (!event.changedTouches[0]) return;
   const touch = event.changedTouches[0];
-  input.mouse.down = true;
   toCanvasCoordinates(touch.clientX, touch.clientY);
+  if (state.running && state.buildMode) {
+    placeBuildPart();
+    input.mouse.down = false;
+  } else {
+    input.mouse.down = true;
+  }
 });
 
 canvas.addEventListener("touchmove", (event) => {
@@ -1005,11 +1181,15 @@ function frame(now) {
 
 setOverlay(
   "PIXEL ZOMBIE SIEGE",
-  "Dodge hard, use buildings for cover, and keep your combo alive.",
+  "B for build mode. Place cover, dodge hard, and survive the siege.",
   "START GAME"
 );
 spawnStars();
 generateStructures();
+state.materials = 12;
+state.buildMode = false;
+state.buildIndex = 0;
+state.buildRotation = 0;
 state.player = {
   x: WORLD.w * 0.5,
   y: WORLD.h * 0.55,
