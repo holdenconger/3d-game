@@ -270,7 +270,7 @@ function gameOver() {
   state.running = false;
   setOverlay(
     "YOU WERE EATEN",
-    `Final score ${Math.floor(state.score)} • Reached wave ${state.wave}`,
+    `Final score ${Math.floor(state.score)} - Reached wave ${state.wave}`,
     "TRY AGAIN"
   );
 }
