@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pixel Zombie Siege</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div class="page-noise"></div>
+    <main class="game-shell">
+      <header class="hud">
+        <div class="hud-item">SCORE <span id="score">0</span></div>
+        <div class="hud-item">WAVE <span id="wave">1</span></div>
+        <div class="hud-item">HP <span id="hp">5</span></div>
+        <div class="hud-item">COMBO <span id="combo">x1.0</span></div>
+      </header>
+
+      <canvas id="game" width="320" height="180" aria-label="Zombie game area"></canvas>
+
+      <footer class="help">
+        <span>WASD/Arrows = Move</span>
+        <span>Mouse = Aim</span>
+        <span>Hold Click/Space = Fire</span>
+        <span>Shift = Dash</span>
+      </footer>
+
+      <section id="overlay" class="overlay visible">
+        <h1 id="overlay-title">PIXEL ZOMBIE SIEGE</h1>
+        <p id="overlay-text">Survive the waves. Keep your combo alive.</p>
+        <button id="start-btn" type="button">START GAME</button>
+      </section>
+    </main>
+
+    <script src="./script.js"></script>
+  </body>
+</html>
