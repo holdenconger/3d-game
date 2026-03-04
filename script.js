@@ -7,6 +7,7 @@ const hud = {
   wave: document.getElementById("wave"),
   hp: document.getElementById("hp"),
   combo: document.getElementById("combo"),
+  dodge: document.getElementById("dodge"),
 };
 
 const overlay = document.getElementById("overlay");
@@ -43,16 +44,114 @@ const state = {
   bannerTimer: 0,
   shake: 0,
   bullets: [],
+  enemyShots: [],
   zombies: [],
   particles: [],
   pickups: [],
   stains: [],
   stars: [],
+  structures: [],
   player: null,
 };
 
 const rand = (min, max) => min + Math.random() * (max - min);
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+const BASE_STRUCTURES = [
+  { x: 24, y: 28, w: 46, h: 34, kind: "building" },
+  { x: 244, y: 24, w: 52, h: 30, kind: "building" },
+  { x: 22, y: 122, w: 42, h: 30, kind: "building" },
+  { x: 238, y: 116, w: 58, h: 42, kind: "building" },
+  { x: 132, y: 32, w: 16, h: 12, kind: "crate" },
+  { x: 171, y: 40, w: 14, h: 10, kind: "crate" },
+  { x: 144, y: 128, w: 20, h: 14, kind: "crate" },
+  { x: 172, y: 114, w: 16, h: 12, kind: "crate" },
+];
+
+function circleHitsRect(cx, cy, radius, rect) {
+  const nearestX = clamp(cx, rect.x, rect.x + rect.w);
+  const nearestY = clamp(cy, rect.y, rect.y + rect.h);
+  const dx = cx - nearestX;
+  const dy = cy - nearestY;
+  return dx * dx + dy * dy < radius * radius;
+}
+
+function resolveCircleRect(entity, rect) {
+  const nearestX = clamp(entity.x, rect.x, rect.x + rect.w);
+  const nearestY = clamp(entity.y, rect.y, rect.y + rect.h);
+  let dx = entity.x - nearestX;
+  let dy = entity.y - nearestY;
+  let distSq = dx * dx + dy * dy;
+  const radiusSq = entity.r * entity.r;
+
+  if (distSq >= radiusSq) return;
+
+  if (distSq === 0) {
+    const left = Math.abs(entity.x - rect.x);
+    const right = Math.abs(rect.x + rect.w - entity.x);
+    const top = Math.abs(entity.y - rect.y);
+    const bottom = Math.abs(rect.y + rect.h - entity.y);
+    const minSide = Math.min(left, right, top, bottom);
+
+    if (minSide === left) {
+      dx = -1;
+      dy = 0;
+    } else if (minSide === right) {
+      dx = 1;
+      dy = 0;
+    } else if (minSide === top) {
+      dx = 0;
+      dy = -1;
+    } else {
+      dx = 0;
+      dy = 1;
+    }
+    distSq = 1;
+  }
+
+  const dist = Math.sqrt(distSq);
+  const overlap = entity.r - dist;
+  entity.x += (dx / dist) * overlap;
+  entity.y += (dy / dist) * overlap;
+}
+
+function moveEntityWithCollisions(entity, moveX, moveY) {
+  entity.x += moveX;
+  for (const s of state.structures) {
+    resolveCircleRect(entity, s);
+  }
+
+  entity.y += moveY;
+  for (const s of state.structures) {
+    resolveCircleRect(entity, s);
+  }
+}
+
+function projectileBlockedByStructures(x, y, r = 1) {
+  for (const s of state.structures) {
+    if (circleHitsRect(x, y, r, s)) return true;
+  }
+  return false;
+}
+
+function lineBlockedByStructures(x1, y1, x2, y2) {
+  const distance = Math.hypot(x2 - x1, y2 - y1);
+  const steps = Math.max(2, Math.ceil(distance / 4));
+
+  for (let i = 1; i < steps; i += 1) {
+    const t = i / steps;
+    const x = x1 + (x2 - x1) * t;
+    const y = y1 + (y2 - y1) * t;
+    if (projectileBlockedByStructures(x, y, 1)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function generateStructures() {
+  state.structures = BASE_STRUCTURES.map((item) => ({ ...item }));
+}
 
 function setOverlay(title, text, buttonText) {
   overlayTitle.textContent = title;
@@ -70,10 +169,14 @@ function waveTarget(level) {
 }
 
 function updateHud() {
+  if (!state.player) return;
   hud.score.textContent = Math.floor(state.score).toString();
   hud.wave.textContent = state.wave.toString();
   hud.hp.textContent = Math.max(0, Math.ceil(state.player.hp)).toString();
   hud.combo.textContent = `x${state.combo.toFixed(1)}`;
+  if (hud.dodge) {
+    hud.dodge.textContent = `${state.player.dodgeCharges}/${state.player.maxDodgeCharges}`;
+  }
 }
 
 function spawnStars() {
@@ -103,10 +206,12 @@ function resetGame() {
   state.bannerTimer = 1.5;
   state.shake = 0;
   state.bullets = [];
+  state.enemyShots = [];
   state.zombies = [];
   state.particles = [];
   state.pickups = [];
   state.stains = [];
+  generateStructures();
   state.player = {
     x: WORLD.w * 0.5,
     y: WORLD.h * 0.55,
@@ -116,7 +221,10 @@ function resetGame() {
     speed: 70,
     shotCooldown: 0,
     hitCooldown: 0,
-    dashCooldown: 0,
+    dodgeLock: 0,
+    dodgeCharges: 2,
+    maxDodgeCharges: 2,
+    dodgeRegen: 0,
     dashTime: 0,
     dashDirX: 0,
     dashDirY: 0,
@@ -147,17 +255,20 @@ function spawnZombie() {
   }
 
   const levelScale = 1 + state.wave * 0.05;
-  const hp = 2 + Math.floor(state.wave * 0.2);
+  const spawnSpitter = state.wave >= 2 && Math.random() < clamp(0.1 + state.wave * 0.015, 0.1, 0.32);
+  const hp = spawnSpitter ? 3 + Math.floor(state.wave * 0.16) : 2 + Math.floor(state.wave * 0.2);
 
   state.zombies.push({
     x,
     y,
     r: 5,
     hp,
-    speed: rand(16, 28) * levelScale,
+    speed: rand(16, 28) * levelScale * (spawnSpitter ? 0.82 : 1),
+    type: spawnSpitter ? "spitter" : "walker",
     pushX: 0,
     pushY: 0,
     damageCooldown: 0,
+    fireCooldown: rand(1, 2.2),
   });
 }
 
@@ -242,14 +353,18 @@ function fireBullet() {
 function startDash(dx, dy) {
   const p = state.player;
   const mag = Math.hypot(dx, dy);
-  if (mag < 0.001 || p.dashCooldown > 0) {
+  if (mag < 0.001 || p.dodgeCharges <= 0 || p.dodgeLock > 0) {
     return;
   }
   p.dashDirX = dx / mag;
   p.dashDirY = dy / mag;
-  p.dashTime = 0.14;
-  p.dashCooldown = 1.3;
-  state.shake = Math.max(state.shake, 1.5);
+  p.dashTime = 0.18;
+  p.dodgeLock = 0.14;
+  p.dodgeCharges -= 1;
+  if (p.dodgeRegen <= 0) {
+    p.dodgeRegen = 1.05;
+  }
+  state.shake = Math.max(state.shake, 2.2);
 
   for (let i = 0; i < 8; i += 1) {
     state.particles.push({
@@ -337,26 +452,36 @@ function update(dt) {
     dy /= mag;
   }
 
-  if ((isDown("ShiftLeft") || isDown("ShiftRight")) && p.dashCooldown <= 0) {
+  if ((isDown("ShiftLeft") || isDown("ShiftRight")) && mag > 0) {
     startDash(dx, dy);
   }
 
   p.shotCooldown -= dt;
   p.hitCooldown -= dt;
-  p.dashCooldown -= dt;
+  p.dodgeLock -= dt;
   p.dashTime -= dt;
+  if (p.dodgeCharges < p.maxDodgeCharges) {
+    p.dodgeRegen -= dt;
+    if (p.dodgeRegen <= 0) {
+      p.dodgeCharges += 1;
+      if (p.dodgeCharges < p.maxDodgeCharges) {
+        p.dodgeRegen = 1.05;
+      } else {
+        p.dodgeRegen = 0;
+      }
+    }
+  }
 
   let speed = p.speed;
   if (p.dashTime > 0) {
-    speed *= 3.6;
+    speed *= 4.2;
     dx = p.dashDirX;
     dy = p.dashDirY;
   }
 
-  p.x += dx * speed * dt;
-  p.y += dy * speed * dt;
-  p.x = clamp(p.x, 7, WORLD.w - 7);
-  p.y = clamp(p.y, 7, WORLD.h - 7);
+  moveEntityWithCollisions(p, dx * speed * dt, dy * speed * dt);
+  p.x = clamp(p.x, p.r + 1, WORLD.w - p.r - 1);
+  p.y = clamp(p.y, p.r + 1, WORLD.h - p.r - 1);
 
   p.trail.push({ x: p.x, y: p.y, life: 0.2 });
   if (p.trail.length > 12) p.trail.shift();
@@ -370,6 +495,7 @@ function update(dt) {
 
   updateBullets(dt);
   updateZombies(dt);
+  updateEnemyShots(dt);
   updatePickups(dt);
   updateParticles(dt, false);
   updateWave(dt);
@@ -393,6 +519,23 @@ function updateBullets(dt) {
 
     let removed = false;
     if (b.life <= 0 || b.x < -2 || b.x > WORLD.w + 2 || b.y < -2 || b.y > WORLD.h + 2) {
+      state.bullets.splice(i, 1);
+      continue;
+    }
+    if (projectileBlockedByStructures(b.x, b.y, b.r + 0.2)) {
+      for (let p = 0; p < 4; p += 1) {
+        state.particles.push({
+          x: b.x,
+          y: b.y,
+          vx: rand(-24, 24),
+          vy: rand(-24, 24),
+          life: rand(0.06, 0.14),
+          maxLife: 0.14,
+          color: "#e3f5ff",
+          size: 1,
+          gravity: 0,
+        });
+      }
       state.bullets.splice(i, 1);
       continue;
     }
@@ -443,11 +586,27 @@ function updateZombies(dt) {
 
     const nx = toX / d;
     const ny = toY / d;
-    z.x += nx * z.speed * dt + z.pushX * dt;
-    z.y += ny * z.speed * dt + z.pushY * dt;
+    moveEntityWithCollisions(z, nx * z.speed * dt + z.pushX * dt, ny * z.speed * dt + z.pushY * dt);
+    z.x = clamp(z.x, z.r + 1, WORLD.w - z.r - 1);
+    z.y = clamp(z.y, z.r + 1, WORLD.h - z.r - 1);
     z.pushX *= 0.75;
     z.pushY *= 0.75;
     z.damageCooldown -= dt;
+    z.fireCooldown -= dt;
+
+    if (z.type === "spitter" && z.fireCooldown <= 0 && d < 145 && !lineBlockedByStructures(z.x, z.y, p.x, p.y)) {
+      const angle = Math.atan2(p.y - z.y, p.x - z.x);
+      const speed = 70;
+      state.enemyShots.push({
+        x: z.x + Math.cos(angle) * 6,
+        y: z.y + Math.sin(angle) * 6,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        r: 2,
+        life: 2.2,
+      });
+      z.fireCooldown = rand(1.2, 2);
+    }
 
     const hitDist = z.r + p.r + 0.4;
     if (d < hitDist && p.hitCooldown <= 0 && p.dashTime <= 0) {
@@ -457,6 +616,42 @@ function updateZombies(dt) {
       state.comboTimer = 0;
       state.shake = Math.max(state.shake, 5.5);
       spawnBlood(p.x, p.y, 1);
+      if (p.hp <= 0) {
+        gameOver();
+        return;
+      }
+    }
+  }
+}
+
+function updateEnemyShots(dt) {
+  const p = state.player;
+  for (let i = state.enemyShots.length - 1; i >= 0; i -= 1) {
+    const shot = state.enemyShots[i];
+    shot.x += shot.vx * dt;
+    shot.y += shot.vy * dt;
+    shot.life -= dt;
+
+    if (
+      shot.life <= 0 ||
+      shot.x < -2 ||
+      shot.x > WORLD.w + 2 ||
+      shot.y < -2 ||
+      shot.y > WORLD.h + 2 ||
+      projectileBlockedByStructures(shot.x, shot.y, shot.r)
+    ) {
+      state.enemyShots.splice(i, 1);
+      continue;
+    }
+
+    if (Math.hypot(shot.x - p.x, shot.y - p.y) < shot.r + p.r && p.hitCooldown <= 0 && p.dashTime <= 0) {
+      p.hp -= 1;
+      p.hitCooldown = 0.75;
+      state.combo = 1;
+      state.comboTimer = 0;
+      state.shake = Math.max(state.shake, 4);
+      spawnBlood(p.x, p.y, 0.8);
+      state.enemyShots.splice(i, 1);
       if (p.hp <= 0) {
         gameOver();
         return;
@@ -537,6 +732,35 @@ function drawBackground(time) {
   }
 }
 
+function drawStructure(structure, time) {
+  const x = Math.floor(structure.x);
+  const y = Math.floor(structure.y);
+  if (structure.kind === "building") {
+    ctx.fillStyle = "#2c3b52";
+    ctx.fillRect(x, y, structure.w, structure.h);
+    ctx.fillStyle = "#3e597a";
+    ctx.fillRect(x + 1, y + 1, structure.w - 2, 3);
+    ctx.fillStyle = "#1d2a3d";
+    ctx.fillRect(x + 2, y + 6, structure.w - 4, structure.h - 8);
+
+    for (let wy = y + 9; wy < y + structure.h - 4; wy += 8) {
+      for (let wx = x + 6; wx < x + structure.w - 4; wx += 10) {
+        const glow = 0.35 + Math.abs(Math.sin(time * 2 + wx * 0.05)) * 0.22;
+        ctx.fillStyle = `rgba(108, 198, 255, ${glow})`;
+        ctx.fillRect(wx, wy, 3, 3);
+      }
+    }
+  } else {
+    ctx.fillStyle = "#594330";
+    ctx.fillRect(x, y, structure.w, structure.h);
+    ctx.fillStyle = "#7e5f43";
+    ctx.fillRect(x + 1, y + 1, structure.w - 2, structure.h - 2);
+    ctx.fillStyle = "#4a3421";
+    ctx.fillRect(x + 1, y + Math.floor(structure.h / 2), structure.w - 2, 1);
+    ctx.fillRect(x + Math.floor(structure.w / 2), y + 1, 1, structure.h - 2);
+  }
+}
+
 function drawPickup(pickup, time) {
   const bob = Math.sin(time * 5 + pickup.x * 0.08) * 0.8;
   const x = Math.floor(pickup.x);
@@ -558,22 +782,30 @@ function drawZombie(zombie, time) {
   const x = Math.floor(zombie.x);
   const y = Math.floor(zombie.y);
   const walk = Math.sin(time * 12 + x * 0.04) > 0 ? 1 : -1;
+  const body = zombie.type === "spitter" ? "#45583e" : "#1f5029";
+  const head = zombie.type === "spitter" ? "#639d61" : "#3d8d4f";
+  const eye = zombie.type === "spitter" ? "#f6f86e" : "#9f2737";
 
-  ctx.fillStyle = "#1f5029";
+  ctx.fillStyle = body;
   ctx.fillRect(x - 4, y - 5, 8, 9);
-  ctx.fillStyle = "#3d8d4f";
+  ctx.fillStyle = head;
   ctx.fillRect(x - 3, y - 8, 6, 4);
   ctx.fillStyle = "#95d76f";
   ctx.fillRect(x - 2, y - 8, 2, 1);
   ctx.fillRect(x + 1, y - 8, 2, 1);
 
-  ctx.fillStyle = "#9f2737";
+  ctx.fillStyle = eye;
   ctx.fillRect(x - 2, y - 7, 1, 1);
   ctx.fillRect(x + 1, y - 7, 1, 1);
 
   ctx.fillStyle = "#2a6736";
   ctx.fillRect(x - 6, y - 3 + walk, 2, 4);
   ctx.fillRect(x + 4, y - 3 - walk, 2, 4);
+
+  if (zombie.type === "spitter") {
+    ctx.fillStyle = "#7da46f";
+    ctx.fillRect(x - 1, y - 5, 2, 2);
+  }
 }
 
 function drawPlayer(time) {
@@ -612,6 +844,14 @@ function drawPlayer(time) {
 function drawBullet(b) {
   ctx.fillStyle = "#ffd166";
   ctx.fillRect(Math.floor(b.x - 1), Math.floor(b.y - 1), 2, 2);
+}
+
+function drawEnemyShot(shot, time) {
+  const pulse = Math.sin(time * 12 + shot.x * 0.1) > 0 ? "#b6ff72" : "#8fe05a";
+  ctx.fillStyle = pulse;
+  ctx.fillRect(Math.floor(shot.x - 2), Math.floor(shot.y - 2), 4, 4);
+  ctx.fillStyle = "#447a2b";
+  ctx.fillRect(Math.floor(shot.x - 1), Math.floor(shot.y - 1), 2, 2);
 }
 
 function drawParticle(p) {
@@ -672,11 +912,13 @@ function render(time) {
     ctx.translate(rand(-state.shake, state.shake), rand(-state.shake, state.shake));
   }
 
+  for (const structure of state.structures) drawStructure(structure, time);
   for (const pickup of state.pickups) drawPickup(pickup, time);
 
   const mobs = [...state.zombies].sort((a, b) => a.y - b.y);
   for (const zombie of mobs) drawZombie(zombie, time);
   for (const bullet of state.bullets) drawBullet(bullet);
+  for (const shot of state.enemyShots) drawEnemyShot(shot, time);
   for (const particle of state.particles) drawParticle(particle);
 
   if (state.player) {
@@ -763,10 +1005,11 @@ function frame(now) {
 
 setOverlay(
   "PIXEL ZOMBIE SIEGE",
-  "Move fast, dash through danger, and hold your combo for huge scores.",
+  "Dodge hard, use buildings for cover, and keep your combo alive.",
   "START GAME"
 );
 spawnStars();
+generateStructures();
 state.player = {
   x: WORLD.w * 0.5,
   y: WORLD.h * 0.55,
@@ -776,7 +1019,10 @@ state.player = {
   speed: 70,
   shotCooldown: 0,
   hitCooldown: 0,
-  dashCooldown: 0,
+  dodgeLock: 0,
+  dodgeCharges: 2,
+  maxDodgeCharges: 2,
+  dodgeRegen: 0,
   dashTime: 0,
   dashDirX: 0,
   dashDirY: 0,
