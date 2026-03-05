@@ -19,16 +19,18 @@ const ui = {
 
 const VIEW_W = canvas.width;
 const VIEW_H = canvas.height;
-const WORLD_W = 2200;
-const WORLD_H = 1500;
+const WORLD_W = 3400;
+const GROUND_Y = 445;
+const GRAVITY = 1700;
+const STORAGE_KEY = "pixel-tower-sideview-v1";
 
 const TOWER = {
-  x: WORLD_W * 0.5,
-  y: WORLD_H * 0.5,
-  r: 96,
+  x: 130,
+  w: 124,
+  h: 220,
+  maxHp: 1500,
 };
-
-const STORAGE_KEY = "tower-outbreak-defense-v1";
+TOWER.y = GROUND_Y - TOWER.h;
 
 const WEAPONS = {
   pistol: {
@@ -37,12 +39,12 @@ const WEAPONS = {
     type: "gun",
     unlockScore: 0,
     damage: 18,
-    fireRate: 0.23,
-    projSpeed: 820,
+    fireRate: 0.2,
+    speed: 940,
     spread: 0.02,
     pellets: 1,
-    range: 860,
     recoil: 0.6,
+    life: 1.1,
   },
   smg: {
     id: "smg",
@@ -51,24 +53,24 @@ const WEAPONS = {
     unlockScore: 1200,
     damage: 11,
     fireRate: 0.085,
-    projSpeed: 850,
+    speed: 1000,
     spread: 0.09,
     pellets: 1,
-    range: 760,
     recoil: 0.45,
+    life: 0.95,
   },
   shotgun: {
     id: "shotgun",
     name: "Shotgun",
     type: "gun",
-    unlockScore: 2800,
-    damage: 10,
-    fireRate: 0.62,
-    projSpeed: 760,
-    spread: 0.27,
+    unlockScore: 2600,
+    damage: 9,
+    fireRate: 0.58,
+    speed: 900,
+    spread: 0.26,
     pellets: 7,
-    range: 520,
-    recoil: 1.6,
+    recoil: 1.3,
+    life: 0.55,
   },
   bat: {
     id: "bat",
@@ -76,19 +78,19 @@ const WEAPONS = {
     type: "melee",
     unlockScore: 0,
     damage: 34,
-    cooldown: 0.44,
-    range: 78,
-    arc: 1.35,
+    cooldown: 0.42,
+    range: 86,
+    arc: 1.45,
   },
   sword: {
     id: "sword",
     name: "Sword",
     type: "melee",
-    unlockScore: 2200,
+    unlockScore: 2000,
     damage: 52,
-    cooldown: 0.33,
-    range: 96,
-    arc: 1.08,
+    cooldown: 0.31,
+    range: 102,
+    arc: 1.12,
   },
 };
 
@@ -104,7 +106,7 @@ const SKINS = [
   {
     id: "crimson",
     name: "Crimson",
-    unlockScore: 1800,
+    unlockScore: 1600,
     body: "#b83a4e",
     head: "#ff7990",
     trail: "#ffc0ca",
@@ -112,7 +114,7 @@ const SKINS = [
   {
     id: "specter",
     name: "Specter",
-    unlockScore: 4200,
+    unlockScore: 3800,
     body: "#5d4db6",
     head: "#9789f6",
     trail: "#b8b0ff",
@@ -120,60 +122,56 @@ const SKINS = [
   {
     id: "gold",
     name: "Gold Ops",
-    unlockScore: 7000,
+    unlockScore: 6500,
     body: "#b98a24",
     head: "#ffd772",
     trail: "#fff1bf",
   },
 ];
 
-const ENEMY_TYPES = {
+const ENEMIES = {
   walker: {
-    id: "walker",
-    hp: 40,
-    speed: 78,
-    touchDamage: 12,
-    towerDamage: 11,
+    hp: 42,
+    speed: 84,
+    touch: 12,
+    tower: 11,
     score: 30,
-    cash: 18,
-    color: "#4e9e58",
-    radius: 17,
+    cash: 20,
+    w: 28,
+    h: 44,
+    body: "#4e9e58",
   },
   runner: {
-    id: "runner",
-    hp: 26,
-    speed: 122,
-    touchDamage: 10,
-    towerDamage: 9,
-    score: 34,
-    cash: 20,
-    color: "#77bd57",
-    radius: 14,
+    hp: 28,
+    speed: 134,
+    touch: 11,
+    tower: 9,
+    score: 36,
+    cash: 24,
+    w: 24,
+    h: 36,
+    body: "#7bbf57",
   },
   brute: {
-    id: "brute",
-    hp: 120,
-    speed: 54,
-    touchDamage: 26,
-    towerDamage: 28,
-    score: 110,
-    cash: 60,
-    color: "#7f5f44",
-    radius: 24,
+    hp: 140,
+    speed: 58,
+    touch: 24,
+    tower: 28,
+    score: 120,
+    cash: 72,
+    w: 42,
+    h: 62,
+    body: "#7f5f44",
   },
 };
 
 const input = {
   keys: new Set(),
-  mouse: {
-    x: VIEW_W / 2,
-    y: VIEW_H / 2,
-    down: false,
-  },
+  mouse: { x: VIEW_W / 2, y: VIEW_H / 2, down: false },
 };
 
-const rand = (min, max) => min + Math.random() * (max - min);
-const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const rand = (a, b) => a + Math.random() * (b - a);
 const dist = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
 const angleDiff = (a, b) => {
   let d = a - b;
@@ -190,22 +188,16 @@ function loadProfile() {
     selectedSkin: "ranger",
     bestScore: 0,
   };
-
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return fallback;
     const parsed = JSON.parse(raw);
-    const profile = {
+    return {
       ...fallback,
       ...parsed,
+      unlockedWeapons: Array.from(new Set(["pistol", "bat", ...(parsed.unlockedWeapons || [])])),
+      unlockedSkins: Array.from(new Set(["ranger", ...(parsed.unlockedSkins || [])])),
     };
-    profile.unlockedWeapons = Array.from(
-      new Set(["pistol", "bat", ...(parsed.unlockedWeapons || [])])
-    );
-    profile.unlockedSkins = Array.from(
-      new Set(["ranger", ...(parsed.unlockedSkins || [])])
-    );
-    return profile;
   } catch {
     return fallback;
   }
@@ -221,23 +213,44 @@ function saveProfile() {
 
 const profile = loadProfile();
 
-function getSkinById(id) {
+function getSkin(id) {
   return SKINS.find((skin) => skin.id === id) || SKINS[0];
+}
+
+function setStatus(text, color = "#93ffd3", duration = 2.2) {
+  ui.status.textContent = text;
+  ui.status.style.color = color;
+  state.statusTimer = duration;
+}
+
+function showOverlay(title, text, button) {
+  ui.overlayTitle.textContent = title;
+  ui.overlayText.textContent = text;
+  ui.startBtn.textContent = button;
+  ui.overlay.classList.add("visible");
+}
+
+function hideOverlay() {
+  ui.overlay.classList.remove("visible");
 }
 
 function createPlayer() {
   return {
-    x: TOWER.x,
-    y: TOWER.y + 140,
-    r: 16,
-    hp: 160,
-    maxHp: 160,
-    speed: 252,
-    facing: -Math.PI * 0.5,
+    x: TOWER.x + TOWER.w + 26,
+    y: GROUND_Y - 24,
+    w: 28,
+    h: 48,
+    vx: 0,
+    vy: 0,
+    hp: 180,
+    maxHp: 180,
+    speed: 300,
+    facing: 1,
     attackCooldown: 0,
     invuln: 0,
     swingTimer: 0,
     trail: [],
+    onGround: true,
   };
 }
 
@@ -245,21 +258,17 @@ const state = {
   running: false,
   score: 0,
   cash: 0,
-  kills: 0,
   wave: 1,
+  kills: 0,
   toSpawn: 0,
   spawnTimer: 0,
   intermission: 0,
+  cameraX: 0,
   shake: 0,
+  waveBanner: "",
   waveBannerTimer: 0,
-  waveBannerText: "",
   statusTimer: 0,
-  camera: { x: 0, y: 0 },
-  tower: {
-    hp: 1000,
-    maxHp: 1000,
-    turretCooldown: 0.45,
-  },
+  tower: { hp: TOWER.maxHp, maxHp: TOWER.maxHp, turretCooldown: 0.45 },
   player: createPlayer(),
   enemies: [],
   bullets: [],
@@ -269,28 +278,17 @@ const state = {
   selectedSkin: profile.selectedSkin,
 };
 
-if (!profile.unlockedWeapons.includes(state.selectedWeapon)) {
-  state.selectedWeapon = "pistol";
-}
-if (!profile.unlockedSkins.includes(state.selectedSkin)) {
-  state.selectedSkin = "ranger";
-}
+if (!profile.unlockedWeapons.includes(state.selectedWeapon)) state.selectedWeapon = "pistol";
+if (!profile.unlockedSkins.includes(state.selectedSkin)) state.selectedSkin = "ranger";
 
-function setStatus(text, color = "#93ffd3", duration = 2.4) {
-  ui.status.textContent = text;
-  ui.status.style.color = color;
-  state.statusTimer = duration;
-}
-
-function showOverlay(title, text, buttonText) {
-  ui.overlayTitle.textContent = title;
-  ui.overlayText.textContent = text;
-  ui.startBtn.textContent = buttonText;
-  ui.overlay.classList.add("visible");
-}
-
-function hideOverlay() {
-  ui.overlay.classList.remove("visible");
+function updateHud() {
+  ui.score.textContent = Math.floor(state.score).toString();
+  ui.wave.textContent = state.wave.toString();
+  ui.towerHp.textContent = `${Math.max(0, Math.round((state.tower.hp / state.tower.maxHp) * 100))}%`;
+  ui.playerHp.textContent = `${Math.max(0, Math.round((state.player.hp / state.player.maxHp) * 100))}%`;
+  ui.cash.textContent = Math.floor(state.cash).toString();
+  ui.weapon.textContent = WEAPONS[state.selectedWeapon].name.toUpperCase();
+  ui.skin.textContent = getSkin(state.selectedSkin).name.toUpperCase();
 }
 
 function ensureUnlocks() {
@@ -298,35 +296,18 @@ function ensureUnlocks() {
     if (profile.unlockedWeapons.includes(weapon.id)) continue;
     if (state.score >= weapon.unlockScore) {
       profile.unlockedWeapons.push(weapon.id);
-      setStatus(`UNLOCKED WEAPON: ${weapon.name.toUpperCase()}`, "#ffd27a", 3.5);
+      setStatus(`UNLOCKED WEAPON: ${weapon.name.toUpperCase()}`, "#ffd27a", 3.2);
       saveProfile();
     }
   }
-
   for (const skin of SKINS) {
     if (profile.unlockedSkins.includes(skin.id)) continue;
     if (state.score >= skin.unlockScore) {
       profile.unlockedSkins.push(skin.id);
-      setStatus(`UNLOCKED SKIN: ${skin.name.toUpperCase()}`, "#ffd27a", 3.5);
+      setStatus(`UNLOCKED SKIN: ${skin.name.toUpperCase()}`, "#ffd27a", 3.2);
       saveProfile();
     }
   }
-}
-
-function updateHud() {
-  ui.score.textContent = Math.floor(state.score).toString();
-  ui.wave.textContent = state.wave.toString();
-  ui.towerHp.textContent = `${Math.max(
-    0,
-    Math.round((state.tower.hp / state.tower.maxHp) * 100)
-  )}%`;
-  ui.playerHp.textContent = `${Math.max(
-    0,
-    Math.round((state.player.hp / state.player.maxHp) * 100)
-  )}%`;
-  ui.cash.textContent = Math.floor(state.cash).toString();
-  ui.weapon.textContent = WEAPONS[state.selectedWeapon].name.toUpperCase();
-  ui.skin.textContent = getSkinById(state.selectedSkin).name.toUpperCase();
 }
 
 function selectWeapon(id) {
@@ -342,27 +323,36 @@ function selectWeapon(id) {
 
 function cycleSkin() {
   const unlocked = SKINS.filter((skin) => profile.unlockedSkins.includes(skin.id));
-  const currentIndex = unlocked.findIndex((skin) => skin.id === state.selectedSkin);
-  const nextSkin = unlocked[(currentIndex + 1) % unlocked.length];
-  state.selectedSkin = nextSkin.id;
-  profile.selectedSkin = nextSkin.id;
+  const idx = unlocked.findIndex((skin) => skin.id === state.selectedSkin);
+  const next = unlocked[(idx + 1) % unlocked.length];
+  state.selectedSkin = next.id;
+  profile.selectedSkin = next.id;
   saveProfile();
-  setStatus(`SKIN: ${nextSkin.name.toUpperCase()}`, "#7ef2ff");
+  setStatus(`SKIN: ${next.name.toUpperCase()}`, "#7ef2ff");
   updateHud();
+}
+
+function startWave(number) {
+  state.wave = number;
+  state.toSpawn = 10 + number * 3;
+  state.spawnTimer = 0.6;
+  state.waveBanner = `WAVE ${number}`;
+  state.waveBannerTimer = 1.8;
 }
 
 function resetGame() {
   state.running = true;
   state.score = 0;
   state.cash = 0;
-  state.kills = 0;
   state.wave = 1;
+  state.kills = 0;
   state.toSpawn = 0;
   state.spawnTimer = 0;
   state.intermission = 0;
+  state.cameraX = 0;
   state.shake = 0;
+  state.waveBanner = "";
   state.waveBannerTimer = 0;
-  state.waveBannerText = "";
   state.statusTimer = 0;
   state.tower.hp = state.tower.maxHp;
   state.tower.turretCooldown = 0.45;
@@ -371,103 +361,79 @@ function resetGame() {
   state.bullets = [];
   state.particles = [];
   state.splats = [];
-  state.camera.x = TOWER.x - VIEW_W * 0.5;
-  state.camera.y = TOWER.y - VIEW_H * 0.5;
   startWave(1);
   updateHud();
 }
 
-function startWave(num) {
-  state.wave = num;
-  state.toSpawn = 9 + num * 3;
-  state.spawnTimer = 0.6;
-  state.waveBannerText = `WAVE ${num}`;
-  state.waveBannerTimer = 1.8;
+function addParticles(x, y, count, color, power = 1, maxSize = 3) {
+  for (let i = 0; i < count; i += 1) {
+    state.particles.push({
+      x,
+      y,
+      vx: rand(-1, 1) * 140 * power,
+      vy: rand(-1, 1) * 140 * power,
+      life: rand(0.12, 0.48),
+      maxLife: 0.48,
+      color,
+      size: Math.max(1, Math.floor(rand(1, maxSize + 1))),
+      gravity: 62,
+    });
+  }
 }
 
 function spawnEnemy() {
   let typeId = "walker";
-  if (state.wave >= 5 && Math.random() < 0.2) typeId = "brute";
+  if (state.wave >= 5 && Math.random() < 0.22) typeId = "brute";
   else if (state.wave >= 3 && Math.random() < 0.38) typeId = "runner";
 
-  const type = ENEMY_TYPES[typeId];
-  const side = Math.floor(Math.random() * 4);
-  const pad = 90;
-  let x = 0;
-  let y = 0;
-
-  if (side === 0) {
-    x = rand(-pad, WORLD_W + pad);
-    y = -pad;
-  } else if (side === 1) {
-    x = WORLD_W + pad;
-    y = rand(-pad, WORLD_H + pad);
-  } else if (side === 2) {
-    x = rand(-pad, WORLD_W + pad);
-    y = WORLD_H + pad;
-  } else {
-    x = -pad;
-    y = rand(-pad, WORLD_H + pad);
-  }
+  const type = ENEMIES[typeId];
+  const x = WORLD_W + rand(40, 260);
+  const y = GROUND_Y - type.h * 0.5;
 
   state.enemies.push({
     typeId,
     x,
     y,
-    r: type.radius,
-    hp: type.hp + Math.floor(state.wave * 1.4),
-    speed: type.speed + state.wave * 1.8,
+    w: type.w,
+    h: type.h,
+    hp: type.hp + Math.floor(state.wave * 1.35),
+    speed: type.speed + state.wave * 1.4,
+    vx: 0,
+    vy: 0,
     attackCooldown: rand(0.2, 0.6),
     pushX: 0,
-    pushY: 0,
   });
-}
-
-function addParticles(x, y, count, color, power = 1, size = 2) {
-  for (let i = 0; i < count; i += 1) {
-    state.particles.push({
-      x,
-      y,
-      vx: rand(-1, 1) * 120 * power,
-      vy: rand(-1, 1) * 120 * power,
-      life: rand(0.1, 0.5),
-      maxLife: 0.5,
-      color,
-      size: Math.max(1, Math.floor(rand(1, size + 1))),
-      gravity: 58,
-    });
-  }
 }
 
 function killEnemy(index) {
   const enemy = state.enemies[index];
-  const type = ENEMY_TYPES[enemy.typeId];
-  state.score += type.score + Math.floor(state.wave * 0.8);
+  const type = ENEMIES[enemy.typeId];
+  state.score += type.score + Math.floor(state.wave * 0.7);
   state.cash += type.cash + Math.floor(state.wave * 0.6);
   state.kills += 1;
-  state.shake = Math.max(state.shake, 1.3);
+  state.shake = Math.max(state.shake, 1.2);
   state.splats.push({
     x: enemy.x,
-    y: enemy.y,
-    r: rand(5, 13),
-    a: rand(0.15, 0.4),
+    y: GROUND_Y - 4,
+    w: rand(10, 24),
+    a: rand(0.14, 0.36),
   });
-  if (state.splats.length > 280) state.splats.shift();
+  if (state.splats.length > 320) state.splats.shift();
   addParticles(enemy.x, enemy.y, 10, "#bc233f", 1.1, 3);
   state.enemies.splice(index, 1);
 }
 
 function fireGun(weapon, angle) {
-  const startX = state.player.x + Math.cos(angle) * 16;
-  const startY = state.player.y + Math.sin(angle) * 16;
-  for (let p = 0; p < weapon.pellets; p += 1) {
-    const spreadAngle = angle + rand(-weapon.spread, weapon.spread);
+  const px = state.player.x + Math.cos(angle) * 14;
+  const py = state.player.y - 8 + Math.sin(angle) * 14;
+  for (let i = 0; i < weapon.pellets; i += 1) {
+    const a = angle + rand(-weapon.spread, weapon.spread);
     state.bullets.push({
-      x: startX,
-      y: startY,
-      vx: Math.cos(spreadAngle) * weapon.projSpeed,
-      vy: Math.sin(spreadAngle) * weapon.projSpeed,
-      life: weapon.range / weapon.projSpeed,
+      x: px,
+      y: py,
+      vx: Math.cos(a) * weapon.speed,
+      vy: Math.sin(a) * weapon.speed,
+      life: weapon.life,
       damage: weapon.damage,
       from: "player",
       r: 2,
@@ -475,90 +441,102 @@ function fireGun(weapon, angle) {
   }
   state.player.attackCooldown = weapon.fireRate;
   state.shake = Math.max(state.shake, weapon.recoil);
-  addParticles(startX, startY, 4, "#ffd585", 0.55, 2);
+  addParticles(px, py, 4, "#ffd585", 0.55, 2);
 }
 
 function doMelee(weapon, angle) {
   state.player.attackCooldown = weapon.cooldown;
   state.player.swingTimer = 0.12;
-  let hitAny = false;
-
+  let hit = false;
   for (let i = state.enemies.length - 1; i >= 0; i -= 1) {
-    const enemy = state.enemies[i];
-    const d = dist(state.player.x, state.player.y, enemy.x, enemy.y);
-    if (d > weapon.range + enemy.r) continue;
-    const toEnemy = Math.atan2(enemy.y - state.player.y, enemy.x - state.player.x);
+    const e = state.enemies[i];
+    const d = dist(state.player.x, state.player.y - 10, e.x, e.y - 10);
+    if (d > weapon.range + e.w * 0.35) continue;
+    const toEnemy = Math.atan2(e.y - state.player.y, e.x - state.player.x);
     if (Math.abs(angleDiff(toEnemy, angle)) > weapon.arc * 0.5) continue;
-
-    enemy.hp -= weapon.damage;
-    enemy.pushX += Math.cos(angle) * 260;
-    enemy.pushY += Math.sin(angle) * 260;
-    addParticles(enemy.x, enemy.y, 8, "#d43f5a", 0.85, 3);
-    hitAny = true;
-    if (enemy.hp <= 0) killEnemy(i);
+    e.hp -= weapon.damage;
+    e.pushX += Math.cos(angle) * 280;
+    addParticles(e.x, e.y - 8, 8, "#d43f5a", 0.9, 3);
+    hit = true;
+    if (e.hp <= 0) killEnemy(i);
   }
-
-  if (hitAny) {
-    state.shake = Math.max(state.shake, 1.2);
-  } else {
-    state.shake = Math.max(state.shake, 0.4);
-  }
+  state.shake = Math.max(state.shake, hit ? 1.2 : 0.45);
 }
 
-function towerAutoFire(dt) {
+function towerTurret(dt) {
   state.tower.turretCooldown -= dt;
-  if (state.tower.turretCooldown > 0 || state.enemies.length === 0) return;
-
+  if (state.tower.turretCooldown > 0) return;
   let target = null;
-  let bestDist = Infinity;
-  for (const enemy of state.enemies) {
-    const d = dist(TOWER.x, TOWER.y, enemy.x, enemy.y);
-    if (d < bestDist && d < 430) {
-      bestDist = d;
-      target = enemy;
+  let best = Infinity;
+  const tx = TOWER.x + TOWER.w - 8;
+  const ty = TOWER.y + 34;
+  for (const e of state.enemies) {
+    const d = dist(tx, ty, e.x, e.y - 12);
+    if (d < best && d < 480) {
+      best = d;
+      target = e;
     }
   }
   if (!target) return;
-
-  const angle = Math.atan2(target.y - TOWER.y, target.x - TOWER.x);
+  const angle = Math.atan2(target.y - 12 - ty, target.x - tx);
   state.bullets.push({
-    x: TOWER.x + Math.cos(angle) * 24,
-    y: TOWER.y + Math.sin(angle) * 24,
-    vx: Math.cos(angle) * 720,
-    vy: Math.sin(angle) * 720,
-    life: 0.75,
-    damage: 16 + state.wave * 0.3,
+    x: tx,
+    y: ty,
+    vx: Math.cos(angle) * 780,
+    vy: Math.sin(angle) * 780,
+    life: 0.8,
+    damage: 16 + state.wave * 0.32,
     from: "tower",
     r: 2,
   });
-  state.tower.turretCooldown = 0.55;
+  state.tower.turretCooldown = 0.5;
+}
+
+function enemyTouchesPlayer(enemy) {
+  return (
+    Math.abs(enemy.x - state.player.x) < enemy.w * 0.5 + state.player.w * 0.5 - 4 &&
+    Math.abs(enemy.y - state.player.y) < enemy.h * 0.5 + state.player.h * 0.5 - 6
+  );
+}
+
+function damagePlayer(amount) {
+  if (state.player.invuln > 0) return;
+  state.player.hp -= amount;
+  state.player.invuln = 0.45;
+  state.shake = Math.max(state.shake, 2.4);
+  addParticles(state.player.x, state.player.y - 8, 7, "#ff5d79", 0.7, 2);
 }
 
 function updateBullets(dt) {
   for (let i = state.bullets.length - 1; i >= 0; i -= 1) {
-    const bullet = state.bullets[i];
-    bullet.x += bullet.vx * dt;
-    bullet.y += bullet.vy * dt;
-    bullet.life -= dt;
+    const b = state.bullets[i];
+    b.x += b.vx * dt;
+    b.y += b.vy * dt;
+    b.life -= dt;
 
     if (
-      bullet.life <= 0 ||
-      bullet.x < -80 ||
-      bullet.x > WORLD_W + 80 ||
-      bullet.y < -80 ||
-      bullet.y > WORLD_H + 80
+      b.life <= 0 ||
+      b.x < -140 ||
+      b.x > WORLD_W + 140 ||
+      b.y < -120 ||
+      b.y > VIEW_H + 220
     ) {
+      state.bullets.splice(i, 1);
+      continue;
+    }
+
+    if (b.y > GROUND_Y + 5) {
       state.bullets.splice(i, 1);
       continue;
     }
 
     for (let e = state.enemies.length - 1; e >= 0; e -= 1) {
       const enemy = state.enemies[e];
-      if (dist(bullet.x, bullet.y, enemy.x, enemy.y) > enemy.r + bullet.r + 1) continue;
-      enemy.hp -= bullet.damage;
-      enemy.pushX += bullet.vx * 0.055;
-      enemy.pushY += bullet.vy * 0.055;
-      addParticles(bullet.x, bullet.y, 4, "#ff7f94", 0.45, 2);
+      if (Math.abs(b.x - enemy.x) > enemy.w * 0.5 + 3) continue;
+      if (Math.abs(b.y - (enemy.y - 8)) > enemy.h * 0.5 + 3) continue;
+      enemy.hp -= b.damage;
+      enemy.pushX += b.vx * 0.05;
+      addParticles(b.x, b.y, 4, "#ff7f94", 0.45, 2);
       state.bullets.splice(i, 1);
       if (enemy.hp <= 0) killEnemy(e);
       break;
@@ -567,45 +545,36 @@ function updateBullets(dt) {
 }
 
 function updateEnemies(dt) {
+  const towerFront = TOWER.x + TOWER.w;
   for (let i = state.enemies.length - 1; i >= 0; i -= 1) {
     const enemy = state.enemies[i];
-    const type = ENEMY_TYPES[enemy.typeId];
-    const dp = dist(enemy.x, enemy.y, state.player.x, state.player.y);
-    const pursuePlayer = dp < 260;
-    const tx = pursuePlayer ? state.player.x : TOWER.x;
-    const ty = pursuePlayer ? state.player.y : TOWER.y;
+    const type = ENEMIES[enemy.typeId];
 
-    const angle = Math.atan2(ty - enemy.y, tx - enemy.x);
-    enemy.x += Math.cos(angle) * enemy.speed * dt + enemy.pushX * dt;
-    enemy.y += Math.sin(angle) * enemy.speed * dt + enemy.pushY * dt;
-    enemy.pushX *= 0.78;
-    enemy.pushY *= 0.78;
+    const nearPlayer = dist(enemy.x, enemy.y, state.player.x, state.player.y) < 170;
+    const targetX = nearPlayer ? state.player.x : towerFront;
+    const dir = targetX < enemy.x ? -1 : 1;
+
+    enemy.vx = dir * enemy.speed + enemy.pushX;
+    enemy.x += enemy.vx * dt;
+    enemy.pushX *= 0.8;
     enemy.attackCooldown -= dt;
 
-    if (enemy.x < -120 || enemy.x > WORLD_W + 120 || enemy.y < -120 || enemy.y > WORLD_H + 120) {
-      state.enemies.splice(i, 1);
-      continue;
-    }
-
-    if (pursuePlayer) {
-      const reach = enemy.r + state.player.r + 3;
-      if (dp < reach && enemy.attackCooldown <= 0) {
-        if (state.player.invuln <= 0) {
-          state.player.hp -= type.touchDamage;
-          state.player.invuln = 0.46;
-          state.shake = Math.max(state.shake, 2.4);
-          addParticles(state.player.x, state.player.y, 6, "#ff5d79", 0.7, 2);
-        }
+    if (enemy.x < towerFront + enemy.w * 0.5 + 2) {
+      enemy.x = towerFront + enemy.w * 0.5 + 2;
+      if (enemy.attackCooldown <= 0) {
+        state.tower.hp -= type.tower;
+        state.shake = Math.max(state.shake, 2.6);
         enemy.attackCooldown = 0.72;
       }
-    } else {
-      const dTower = dist(enemy.x, enemy.y, TOWER.x, TOWER.y);
-      const reachTower = enemy.r + TOWER.r + 2;
-      if (dTower < reachTower && enemy.attackCooldown <= 0) {
-        state.tower.hp -= type.towerDamage;
-        enemy.attackCooldown = 0.74;
-        state.shake = Math.max(state.shake, 2.8);
-      }
+    }
+
+    if (enemyTouchesPlayer(enemy) && enemy.attackCooldown <= 0) {
+      damagePlayer(type.touch);
+      enemy.attackCooldown = 0.72;
+    }
+
+    if (enemy.x < -220 || enemy.x > WORLD_W + 220) {
+      state.enemies.splice(i, 1);
     }
   }
 }
@@ -624,9 +593,7 @@ function updateParticles(dt) {
 function updateWave(dt) {
   if (state.intermission > 0) {
     state.intermission -= dt;
-    if (state.intermission <= 0) {
-      startWave(state.wave + 1);
-    }
+    if (state.intermission <= 0) startWave(state.wave + 1);
     return;
   }
 
@@ -635,95 +602,89 @@ function updateWave(dt) {
     if (state.spawnTimer <= 0) {
       spawnEnemy();
       state.toSpawn -= 1;
-      state.spawnTimer = clamp(0.72 - state.wave * 0.022, 0.2, 0.72) * rand(0.72, 1.22);
+      state.spawnTimer = clamp(0.74 - state.wave * 0.022, 0.2, 0.74) * rand(0.72, 1.18);
     }
   } else if (state.enemies.length === 0) {
     state.intermission = 4;
-    state.cash += 120 + state.wave * 36;
-    state.score += 120 + state.wave * 42;
-    setStatus(`WAVE CLEARED! +BONUS`, "#7dffcb");
+    state.cash += 120 + state.wave * 34;
+    state.score += 120 + state.wave * 40;
+    setStatus("WAVE CLEARED! BONUS INCOME", "#7dffcb");
   }
 }
 
 function tryRepairTower() {
-  const nearTower = dist(state.player.x, state.player.y, TOWER.x, TOWER.y) < TOWER.r + 140;
-  if (!nearTower) {
-    setStatus("MOVE CLOSER TO TOWER TO REPAIR", "#ff9aa9");
-    return;
-  }
-  if (state.cash < 200) {
-    setStatus("NOT ENOUGH CASH ($200)", "#ff9aa9");
-    return;
-  }
-  if (state.tower.hp >= state.tower.maxHp) {
-    setStatus("TOWER IS FULL", "#ffd27a");
-    return;
-  }
+  const near = dist(state.player.x, state.player.y, towerFrontX(), GROUND_Y - 50) < 170;
+  if (!near) return setStatus("MOVE CLOSER TO TOWER TO REPAIR", "#ff9aa9");
+  if (state.cash < 200) return setStatus("NOT ENOUGH CASH ($200)", "#ff9aa9");
+  if (state.tower.hp >= state.tower.maxHp) return setStatus("TOWER FULL", "#ffd27a");
   state.cash -= 200;
   state.tower.hp = clamp(state.tower.hp + 220, 0, state.tower.maxHp);
   setStatus("TOWER REPAIRED +22%", "#7dffcb");
 }
 
+function towerFrontX() {
+  return TOWER.x + TOWER.w;
+}
+
 function updatePlayer(dt) {
-  const down = (code) => input.keys.has(code);
+  const down = (k) => input.keys.has(k);
+  const p = state.player;
 
-  let dx = 0;
-  let dy = 0;
-  if (down("KeyW") || down("ArrowUp")) dy -= 1;
-  if (down("KeyS") || down("ArrowDown")) dy += 1;
-  if (down("KeyA") || down("ArrowLeft")) dx -= 1;
-  if (down("KeyD") || down("ArrowRight")) dx += 1;
+  let move = 0;
+  if (down("KeyA") || down("ArrowLeft")) move -= 1;
+  if (down("KeyD") || down("ArrowRight")) move += 1;
 
-  const mag = Math.hypot(dx, dy);
-  if (mag > 0) {
-    dx /= mag;
-    dy /= mag;
+  const sprint = down("ShiftLeft") || down("ShiftRight");
+  const targetSpeed = move * p.speed * (sprint ? 1.35 : 1);
+  p.vx += (targetSpeed - p.vx) * clamp(dt * 12, 0, 1);
+
+  if ((down("KeyW") || down("ArrowUp") || down("Space")) && p.onGround) {
+    p.vy = -620;
+    p.onGround = false;
   }
 
-  const sprinting = down("ShiftLeft") || down("ShiftRight");
-  const speed = state.player.speed * (sprinting ? 1.4 : 1);
-  state.player.x = clamp(state.player.x + dx * speed * dt, 12, WORLD_W - 12);
-  state.player.y = clamp(state.player.y + dy * speed * dt, 12, WORLD_H - 12);
+  p.vy += GRAVITY * dt;
+  p.x += p.vx * dt;
+  p.y += p.vy * dt;
 
-  const worldMouseX = state.camera.x + input.mouse.x;
-  const worldMouseY = state.camera.y + input.mouse.y;
-  const aim = Math.atan2(worldMouseY - state.player.y, worldMouseX - state.player.x);
-  state.player.facing = aim;
+  if (p.y + p.h * 0.5 >= GROUND_Y) {
+    p.y = GROUND_Y - p.h * 0.5;
+    p.vy = 0;
+    p.onGround = true;
+  }
 
-  state.player.attackCooldown -= dt;
-  state.player.invuln -= dt;
-  state.player.swingTimer -= dt;
+  p.x = clamp(p.x, 40, WORLD_W - 40);
 
-  state.player.trail.push({
-    x: state.player.x,
-    y: state.player.y,
-    life: 0.2,
-  });
-  if (state.player.trail.length > 14) state.player.trail.shift();
-  for (const trail of state.player.trail) trail.life -= dt;
-  state.player.trail = state.player.trail.filter((trail) => trail.life > 0);
+  const worldMouseX = state.cameraX + input.mouse.x;
+  const worldMouseY = input.mouse.y;
+  const aim = Math.atan2(worldMouseY - (p.y - 10), worldMouseX - p.x);
+  p.facing = aim;
 
-  if (input.mouse.down && state.player.attackCooldown <= 0) {
+  p.attackCooldown -= dt;
+  p.invuln -= dt;
+  p.swingTimer -= dt;
+
+  p.trail.push({ x: p.x, y: p.y, life: 0.2 });
+  if (p.trail.length > 14) p.trail.shift();
+  for (const t of p.trail) t.life -= dt;
+  p.trail = p.trail.filter((t) => t.life > 0);
+
+  if (input.mouse.down && p.attackCooldown <= 0) {
     const weapon = WEAPONS[state.selectedWeapon];
-    if (weapon.type === "gun") {
-      fireGun(weapon, aim);
-    } else {
-      doMelee(weapon, aim);
-    }
+    if (weapon.type === "gun") fireGun(weapon, aim);
+    else doMelee(weapon, aim);
   }
 }
 
 function updateCamera(dt) {
-  const targetX = clamp(state.player.x - VIEW_W * 0.5, 0, WORLD_W - VIEW_W);
-  const targetY = clamp(state.player.y - VIEW_H * 0.5, 0, WORLD_H - VIEW_H);
-  state.camera.x += (targetX - state.camera.x) * clamp(8 * dt, 0, 1);
-  state.camera.y += (targetY - state.camera.y) * clamp(8 * dt, 0, 1);
+  const target = clamp(state.player.x - VIEW_W * 0.42, 0, WORLD_W - VIEW_W);
+  state.cameraX += (target - state.cameraX) * clamp(9 * dt, 0, 1);
 }
 
 function update(dt) {
   if (state.statusTimer > 0) {
     state.statusTimer -= dt;
-    if (state.statusTimer <= 0) ui.status.textContent = "Hold the perimeter.";
+    if (state.statusTimer <= 0) ui.status.textContent = "Hold the wall.";
   }
 
   if (!state.running) {
@@ -732,7 +693,7 @@ function update(dt) {
   }
 
   updatePlayer(dt);
-  towerAutoFire(dt);
+  towerTurret(dt);
   updateBullets(dt);
   updateEnemies(dt);
   updateParticles(dt);
@@ -748,7 +709,7 @@ function update(dt) {
     profile.bestScore = Math.max(profile.bestScore, Math.floor(state.score));
     saveProfile();
     showOverlay(
-      state.tower.hp <= 0 ? "TOWER FALLEN" : "YOU DIED",
+      state.tower.hp <= 0 ? "TOWER DESTROYED" : "YOU DIED",
       `Final score ${Math.floor(state.score)} | Best ${profile.bestScore}`,
       "RESTART DEFENSE"
     );
@@ -757,150 +718,162 @@ function update(dt) {
   updateHud();
 }
 
-function drawGround(time) {
-  ctx.fillStyle = "#0a1018";
-  ctx.fillRect(0, 0, WORLD_W, WORLD_H);
+function drawBackground(time) {
+  const sky = ctx.createLinearGradient(0, 0, 0, VIEW_H);
+  sky.addColorStop(0, "#0e1627");
+  sky.addColorStop(1, "#1b293c");
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, VIEW_W, VIEW_H);
 
-  const cell = 64;
-  for (let y = 0; y < WORLD_H; y += cell) {
-    for (let x = 0; x < WORLD_W; x += cell) {
-      const c = ((x / cell + y / cell) % 2 === 0) ? "#0f1824" : "#101d2b";
-      ctx.fillStyle = c;
-      ctx.fillRect(x, y, cell, cell);
-    }
-  }
-
-  ctx.strokeStyle = "rgba(130, 170, 220, 0.08)";
-  ctx.lineWidth = 1;
-  for (let x = 0; x < WORLD_W; x += cell) {
-    ctx.beginPath();
-    ctx.moveTo(x + 0.5, 0);
-    ctx.lineTo(x + 0.5, WORLD_H);
-    ctx.stroke();
-  }
-  for (let y = 0; y < WORLD_H; y += cell) {
-    ctx.beginPath();
-    ctx.moveTo(0, y + 0.5);
-    ctx.lineTo(WORLD_W, y + 0.5);
-    ctx.stroke();
-  }
-
-  for (const splat of state.splats) {
-    ctx.fillStyle = `rgba(126, 24, 40, ${splat.a.toFixed(3)})`;
-    ctx.fillRect(splat.x - splat.r, splat.y - splat.r, splat.r * 2, splat.r * 2);
-  }
-
-  const pulse = 0.24 + Math.abs(Math.sin(time * 1.8)) * 0.16;
-  ctx.strokeStyle = `rgba(109, 255, 210, ${pulse.toFixed(3)})`;
-  ctx.lineWidth = 3;
+  const moonX = 740 - state.cameraX * 0.04;
+  const moonY = 94;
+  ctx.fillStyle = "#d8ebff";
   ctx.beginPath();
-  ctx.arc(TOWER.x, TOWER.y, TOWER.r + 24, 0, Math.PI * 2);
-  ctx.stroke();
+  ctx.arc(moonX, moonY, 26, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#1a2636";
+  for (let i = 0; i < 7; i += 1) {
+    const x = i * 320 - (state.cameraX * 0.2) % 320;
+    ctx.beginPath();
+    ctx.moveTo(x, GROUND_Y - 120);
+    ctx.lineTo(x + 160, GROUND_Y - 230);
+    ctx.lineTo(x + 320, GROUND_Y - 120);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  ctx.fillStyle = "#223247";
+  for (let i = 0; i < 8; i += 1) {
+    const x = i * 280 - (state.cameraX * 0.35) % 280;
+    ctx.fillRect(x, GROUND_Y - 170, 40, 170);
+    ctx.fillRect(x + 50, GROUND_Y - 220, 36, 220);
+    ctx.fillRect(x + 92, GROUND_Y - 145, 42, 145);
+  }
+}
+
+function drawGround() {
+  const cell = 48;
+  const start = Math.floor(state.cameraX / cell) * cell;
+  for (let x = start; x < state.cameraX + VIEW_W + cell; x += cell) {
+    const screenX = x - state.cameraX;
+    ctx.fillStyle = ((x / cell) % 2 === 0) ? "#1f2b3a" : "#233346";
+    ctx.fillRect(screenX, GROUND_Y, cell, VIEW_H - GROUND_Y);
+  }
+  ctx.fillStyle = "#2e3f57";
+  ctx.fillRect(0, GROUND_Y - 7, VIEW_W, 7);
 }
 
 function drawTower(time) {
-  ctx.fillStyle = "#374d72";
-  ctx.beginPath();
-  ctx.arc(TOWER.x, TOWER.y, TOWER.r, 0, Math.PI * 2);
-  ctx.fill();
+  const x = TOWER.x - state.cameraX;
+  const y = TOWER.y;
 
-  ctx.fillStyle = "#4f6b9a";
-  ctx.beginPath();
-  ctx.arc(TOWER.x, TOWER.y, TOWER.r - 12, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.fillStyle = "#314663";
+  ctx.fillRect(x, y, TOWER.w, TOWER.h);
+  ctx.fillStyle = "#425d83";
+  ctx.fillRect(x + 4, y + 4, TOWER.w - 8, 18);
 
-  const hpRatio = clamp(state.tower.hp / state.tower.maxHp, 0, 1);
-  ctx.fillStyle = hpRatio > 0.5 ? "#79ffd8" : hpRatio > 0.25 ? "#ffd166" : "#ff5f78";
-  ctx.fillRect(TOWER.x - 50, TOWER.y + TOWER.r + 16, 100 * hpRatio, 6);
-  ctx.strokeStyle = "#1a2438";
-  ctx.strokeRect(TOWER.x - 50, TOWER.y + TOWER.r + 16, 100, 6);
+  ctx.fillStyle = "#24344b";
+  for (let wy = y + 28; wy < y + TOWER.h - 20; wy += 26) {
+    for (let wx = x + 12; wx < x + TOWER.w - 10; wx += 24) {
+      ctx.fillRect(wx, wy, 12, 12);
+      const glow = 0.36 + Math.abs(Math.sin(time * 2 + wx * 0.02)) * 0.2;
+      ctx.fillStyle = `rgba(116, 206, 255, ${glow.toFixed(3)})`;
+      ctx.fillRect(wx + 2, wy + 2, 8, 8);
+      ctx.fillStyle = "#24344b";
+    }
+  }
 
-  const turretAngle = time * 1.8;
-  ctx.strokeStyle = "#ffd88d";
-  ctx.lineWidth = 4;
-  ctx.beginPath();
-  ctx.moveTo(TOWER.x, TOWER.y);
-  ctx.lineTo(TOWER.x + Math.cos(turretAngle) * 22, TOWER.y + Math.sin(turretAngle) * 22);
-  ctx.stroke();
+  ctx.fillStyle = "#2a3d58";
+  ctx.fillRect(x + TOWER.w - 16, y + 26, 16, 22);
+
+  const hp = clamp(state.tower.hp / state.tower.maxHp, 0, 1);
+  ctx.fillStyle = hp > 0.5 ? "#79ffd8" : hp > 0.25 ? "#ffd166" : "#ff5f78";
+  ctx.fillRect(x + 10, y - 11, (TOWER.w - 20) * hp, 6);
+  ctx.strokeStyle = "#102033";
+  ctx.strokeRect(x + 10, y - 11, TOWER.w - 20, 6);
 }
 
 function drawEnemy(enemy, time) {
-  const type = ENEMY_TYPES[enemy.typeId];
-  const x = enemy.x;
+  const type = ENEMIES[enemy.typeId];
+  const x = enemy.x - state.cameraX;
   const y = enemy.y;
-
-  ctx.fillStyle = "rgba(0, 0, 0, 0.25)";
-  ctx.beginPath();
-  ctx.ellipse(x, y + type.radius + 4, type.radius * 0.9, 4, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.fillStyle = type.color;
-  ctx.fillRect(Math.floor(x - type.radius), Math.floor(y - type.radius), type.radius * 2, type.radius * 2);
-
+  ctx.fillStyle = "rgba(0,0,0,0.25)";
+  ctx.fillRect(x - enemy.w * 0.34, GROUND_Y + 2, enemy.w * 0.68, 4);
+  ctx.fillStyle = type.body;
+  ctx.fillRect(x - enemy.w * 0.5, y - enemy.h * 0.5, enemy.w, enemy.h);
   const blink = Math.sin(time * 9 + x * 0.03) > 0;
   ctx.fillStyle = blink ? "#ffe680" : "#c83b52";
-  ctx.fillRect(Math.floor(x - 4), Math.floor(y - type.radius + 5), 2, 2);
-  ctx.fillRect(Math.floor(x + 2), Math.floor(y - type.radius + 5), 2, 2);
+  ctx.fillRect(x - 6, y - enemy.h * 0.5 + 8, 3, 3);
+  ctx.fillRect(x + 3, y - enemy.h * 0.5 + 8, 3, 3);
 }
 
 function drawPlayer(time) {
-  const skin = getSkinById(state.selectedSkin);
   const p = state.player;
-  const x = p.x;
+  const skin = getSkin(state.selectedSkin);
+  const x = p.x - state.cameraX;
   const y = p.y;
 
-  for (const trail of p.trail) {
-    const alpha = clamp(trail.life / 0.2, 0, 1) * 0.4;
+  for (const t of p.trail) {
+    const alpha = clamp(t.life / 0.2, 0, 1) * 0.4;
     ctx.fillStyle = `${skin.trail}${Math.floor(alpha * 255)
       .toString(16)
       .padStart(2, "0")}`;
-    ctx.fillRect(Math.floor(trail.x - 4), Math.floor(trail.y - 4), 8, 8);
+    ctx.fillRect(Math.floor(t.x - state.cameraX - 4), Math.floor(t.y - 4), 8, 8);
   }
 
-  ctx.fillStyle = "rgba(0, 0, 0, 0.28)";
-  ctx.beginPath();
-  ctx.ellipse(x, y + p.r + 4, p.r * 0.85, 4, 0, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.fillStyle = "rgba(0,0,0,0.28)";
+  ctx.fillRect(x - p.w * 0.35, GROUND_Y + 2, p.w * 0.7, 4);
 
   const flicker = p.invuln > 0 && Math.sin(time * 40) > 0;
   if (!flicker) {
     ctx.fillStyle = skin.body;
-    ctx.fillRect(Math.floor(x - p.r), Math.floor(y - p.r), p.r * 2, p.r * 2);
+    ctx.fillRect(x - p.w * 0.5, y - p.h * 0.5, p.w, p.h);
     ctx.fillStyle = skin.head;
-    ctx.fillRect(Math.floor(x - p.r + 2), Math.floor(y - p.r - 9), p.r * 2 - 4, 7);
+    ctx.fillRect(x - p.w * 0.5 + 2, y - p.h * 0.5 - 10, p.w - 4, 8);
     ctx.fillStyle = "#ebf6ff";
-    ctx.fillRect(Math.floor(x - 4), Math.floor(y - p.r - 6), 2, 2);
-    ctx.fillRect(Math.floor(x + 2), Math.floor(y - p.r - 6), 2, 2);
+    ctx.fillRect(x - 5, y - p.h * 0.5 - 8, 2, 2);
+    ctx.fillRect(x + 3, y - p.h * 0.5 - 8, 2, 2);
   }
 
   const weapon = WEAPONS[state.selectedWeapon];
+  let angle = p.facing;
+  if (weapon.type === "melee" && p.swingTimer > 0) {
+    angle += Math.sin((0.12 - p.swingTimer) * 38) * 0.6;
+  }
+  const reach = weapon.type === "melee" ? 24 : 18;
   ctx.strokeStyle = weapon.type === "melee" ? "#f4c673" : "#ffd575";
   ctx.lineWidth = weapon.type === "melee" ? 5 : 3;
   ctx.beginPath();
-  ctx.moveTo(x, y - 1);
-  const reach = weapon.type === "melee" ? 22 : 17;
-  let drawAngle = p.facing;
-  if (p.swingTimer > 0 && weapon.type === "melee") {
-    drawAngle += Math.sin((0.12 - p.swingTimer) * 38) * 0.55;
-  }
-  ctx.lineTo(x + Math.cos(drawAngle) * reach, y + Math.sin(drawAngle) * reach);
+  ctx.moveTo(x, y - 8);
+  ctx.lineTo(x + Math.cos(angle) * reach, y - 8 + Math.sin(angle) * reach);
   ctx.stroke();
 }
 
 function drawBullets() {
-  for (const bullet of state.bullets) {
-    ctx.fillStyle = bullet.from === "tower" ? "#9be2ff" : "#ffd166";
-    ctx.fillRect(Math.floor(bullet.x - 1), Math.floor(bullet.y - 1), 3, 3);
+  for (const b of state.bullets) {
+    const x = b.x - state.cameraX;
+    ctx.fillStyle = b.from === "tower" ? "#9be2ff" : "#ffd166";
+    ctx.fillRect(Math.floor(x - 1), Math.floor(b.y - 1), 3, 3);
   }
 }
 
 function drawParticles() {
   for (const p of state.particles) {
+    const x = p.x - state.cameraX;
     const a = clamp(p.life / p.maxLife, 0, 1);
     ctx.globalAlpha = a;
     ctx.fillStyle = p.color;
-    ctx.fillRect(Math.floor(p.x), Math.floor(p.y), p.size, p.size);
+    ctx.fillRect(Math.floor(x), Math.floor(p.y), p.size, p.size);
     ctx.globalAlpha = 1;
+  }
+}
+
+function drawSplats() {
+  for (const s of state.splats) {
+    const x = s.x - state.cameraX;
+    ctx.fillStyle = `rgba(120, 22, 36, ${s.a.toFixed(3)})`;
+    ctx.fillRect(x - s.w * 0.5, s.y, s.w, 4);
   }
 }
 
@@ -923,14 +896,16 @@ function drawCrosshair() {
   ctx.fillRect(x - 1, y - 1, 2, 2);
 }
 
-function drawWorld(time) {
+function render(time) {
+  drawBackground(time);
+
   const shakeX = state.shake > 0 ? rand(-state.shake, state.shake) : 0;
   const shakeY = state.shake > 0 ? rand(-state.shake, state.shake) : 0;
-
   ctx.save();
-  ctx.translate(-state.camera.x + shakeX, -state.camera.y + shakeY);
+  ctx.translate(shakeX, shakeY);
 
-  drawGround(time);
+  drawGround();
+  drawSplats();
   drawTower(time);
   for (const enemy of state.enemies) drawEnemy(enemy, time);
   drawBullets();
@@ -938,22 +913,21 @@ function drawWorld(time) {
   drawPlayer(time);
 
   ctx.restore();
-
   drawCrosshair();
 
   if (state.waveBannerTimer > 0) {
     const alpha = clamp(state.waveBannerTimer / 1.8, 0, 1);
     ctx.fillStyle = `rgba(14, 28, 44, ${(0.35 * alpha).toFixed(3)})`;
-    ctx.fillRect(VIEW_W * 0.5 - 90, 20, 180, 28);
+    ctx.fillRect(VIEW_W * 0.5 - 92, 20, 184, 28);
     ctx.fillStyle = "#79ffd8";
     ctx.font = "10px 'Press Start 2P', monospace";
     ctx.textAlign = "center";
-    ctx.fillText(state.waveBannerText, VIEW_W * 0.5, 38);
+    ctx.fillText(state.waveBanner, VIEW_W * 0.5, 38);
   }
 
   if (state.intermission > 0 && state.running) {
-    ctx.fillStyle = "rgba(12, 20, 35, 0.4)";
-    ctx.fillRect(14, VIEW_H - 36, 330, 20);
+    ctx.fillStyle = "rgba(12,20,35,0.42)";
+    ctx.fillRect(14, VIEW_H - 36, 340, 20);
     ctx.fillStyle = "#9fe4ff";
     ctx.font = "8px 'Press Start 2P', monospace";
     ctx.textAlign = "left";
@@ -961,17 +935,10 @@ function drawWorld(time) {
   }
 }
 
-function render(time) {
-  ctx.clearRect(0, 0, VIEW_W, VIEW_H);
-  drawWorld(time);
-}
-
-function toCanvasCoordinates(clientX, clientY) {
+function toCanvas(clientX, clientY) {
   const rect = canvas.getBoundingClientRect();
-  const x = ((clientX - rect.left) / rect.width) * VIEW_W;
-  const y = ((clientY - rect.top) / rect.height) * VIEW_H;
-  input.mouse.x = clamp(x, 0, VIEW_W);
-  input.mouse.y = clamp(y, 0, VIEW_H);
+  input.mouse.x = clamp(((clientX - rect.left) / rect.width) * VIEW_W, 0, VIEW_W);
+  input.mouse.y = clamp(((clientY - rect.top) / rect.height) * VIEW_H, 0, VIEW_H);
 }
 
 window.addEventListener("keydown", (event) => {
@@ -1016,11 +983,11 @@ window.addEventListener("keyup", (event) => {
 });
 
 canvas.addEventListener("mousemove", (event) => {
-  toCanvasCoordinates(event.clientX, event.clientY);
+  toCanvas(event.clientX, event.clientY);
 });
 
 canvas.addEventListener("mousedown", (event) => {
-  toCanvasCoordinates(event.clientX, event.clientY);
+  toCanvas(event.clientX, event.clientY);
   if (event.button === 0) input.mouse.down = true;
 });
 
@@ -1032,7 +999,7 @@ canvas.addEventListener("touchstart", (event) => {
   event.preventDefault();
   const touch = event.changedTouches[0];
   if (!touch) return;
-  toCanvasCoordinates(touch.clientX, touch.clientY);
+  toCanvas(touch.clientX, touch.clientY);
   input.mouse.down = true;
 });
 
@@ -1040,7 +1007,7 @@ canvas.addEventListener("touchmove", (event) => {
   event.preventDefault();
   const touch = event.changedTouches[0];
   if (!touch) return;
-  toCanvasCoordinates(touch.clientX, touch.clientY);
+  toCanvas(touch.clientX, touch.clientY);
 });
 
 canvas.addEventListener("touchend", () => {
@@ -1052,20 +1019,20 @@ ui.startBtn.addEventListener("click", () => {
   resetGame();
 });
 
-let lastTime = performance.now();
+let last = performance.now();
 function frame(now) {
-  const dt = Math.min(0.033, (now - lastTime) / 1000);
-  lastTime = now;
+  const dt = Math.min(0.033, (now - last) / 1000);
+  last = now;
   update(dt);
   render(now / 1000);
   requestAnimationFrame(frame);
 }
 
 showOverlay(
-  "TOWER OUTBREAK DEFENSE",
-  "Defend the tower. Run outside and fight with guns, bat, or sword. Unlock new weapons and skins by score.",
+  "PIXEL TOWER SIEGE",
+  "Side-view defense. Go outside the tower and fight with guns, bat, or sword. Unlock gear by score.",
   "START DEFENSE"
 );
 updateHud();
-setStatus("Press 1-5 to swap weapons. Press C to change unlocked skin.", "#8fe8ff", 4);
+setStatus("A/D move, W jump, click attack. 1-5 weapons, C skin.", "#8fe8ff", 4);
 requestAnimationFrame(frame);
