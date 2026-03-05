@@ -17,8 +17,9 @@ const ui = {
   startBtn: document.getElementById("start-btn"),
 };
 
-const VIEW_W = canvas.width;
-const VIEW_H = canvas.height;
+const RENDER_SCALE = 3;
+const VIEW_W = canvas.width * RENDER_SCALE;
+const VIEW_H = canvas.height * RENDER_SCALE;
 const WORLD_W = 3400;
 const GROUND_Y = 445;
 const GRAVITY = 1700;
@@ -897,6 +898,10 @@ function drawCrosshair() {
 }
 
 function render(time) {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.setTransform(1 / RENDER_SCALE, 0, 0, 1 / RENDER_SCALE, 0, 0);
+
   drawBackground(time);
 
   const shakeX = state.shake > 0 ? rand(-state.shake, state.shake) : 0;
@@ -933,6 +938,8 @@ function render(time) {
     ctx.textAlign = "left";
     ctx.fillText(`NEXT WAVE IN ${Math.ceil(state.intermission)}s`, 22, VIEW_H - 22);
   }
+
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
 }
 
 function toCanvas(clientX, clientY) {
