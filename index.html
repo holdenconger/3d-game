@@ -17,6 +17,9 @@
         <div class="hud-item">DODGE <span id="dodge">2/2</span></div>
         <div class="hud-item">MATS <span id="mats">12</span></div>
         <div class="hud-item">MODE <span id="build">FIGHT</span></div>
+        <div class="hud-item">MAP <span id="map-label">Neon Block</span></div>
+        <div class="hud-item">HERO <span id="hero-label">Survivor</span></div>
+        <div class="hud-item">ACH <span id="ach-count">0/3</span></div>
       </header>
 
       <canvas id="game" width="320" height="180" aria-label="Zombie game area"></canvas>
@@ -32,7 +35,20 @@
 
       <section id="overlay" class="overlay visible">
         <h1 id="overlay-title">PIXEL ZOMBIE SIEGE</h1>
-        <p id="overlay-text">Survive the waves. Keep your combo alive.</p>
+        <p id="overlay-text">Pick a map, choose a hero, then survive the horde.</p>
+        <div class="sector-grid">
+          <div class="sector-card">
+            <h2 class="sector-title">MAP SECTOR</h2>
+            <div id="map-sector" class="chip-grid"></div>
+          </div>
+          <div class="sector-card">
+            <h2 class="sector-title">CHARACTER SECTOR</h2>
+            <div id="character-sector" class="chip-grid"></div>
+          </div>
+        </div>
+        <p id="achievement-text" class="achievement-text">
+          Unlock heroes by finishing achievements.
+        </p>
         <button id="start-btn" type="button">START GAME</button>
       </section>
     </main>

@@ -142,6 +142,72 @@ body {
   color: #b8d3ec;
 }
 
+.sector-grid {
+  width: min(100%, 920px);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
+  gap: 0.7rem;
+}
+
+.sector-card {
+  background: rgba(9, 18, 34, 0.85);
+  border: 2px solid #3a568c;
+  padding: 0.55rem;
+  text-align: left;
+}
+
+.sector-title {
+  margin: 0 0 0.55rem 0;
+  font-size: clamp(8px, 1vw, 11px);
+  color: #b9ddff;
+}
+
+.chip-grid {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.sector-chip {
+  font-family: inherit;
+  font-size: clamp(7px, 0.95vw, 10px);
+  text-align: left;
+  border: 2px solid #42619f;
+  background: #17243c;
+  color: #cde4ff;
+  padding: 0.45rem;
+  cursor: pointer;
+}
+
+.sector-chip small {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.8em;
+  color: #95b0d6;
+}
+
+.sector-chip:hover {
+  filter: brightness(1.1);
+}
+
+.sector-chip.selected {
+  border-color: #6dffd2;
+  box-shadow: 0 0 0 1px #6dffd2 inset;
+}
+
+.sector-chip.locked {
+  opacity: 0.55;
+  cursor: not-allowed;
+  border-color: #595c68;
+  background: #20242d;
+  color: #9ca3b4;
+}
+
+.achievement-text {
+  margin: 0;
+  color: #8dfcca;
+  font-size: clamp(7px, 1vw, 10px);
+}
+
 #start-btn {
   font-family: inherit;
   border: 3px solid #5affab;
@@ -186,5 +252,9 @@ body {
 
   .overlay {
     inset: 0.55rem;
+  }
+
+  .sector-grid {
+    grid-template-columns: 1fr;
   }
 }
