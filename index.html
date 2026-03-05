@@ -3,54 +3,45 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Pixel Zombie Siege</title>
+    <title>Tower Outbreak Defense</title>
     <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
-    <div class="page-noise"></div>
+    <div class="noise"></div>
+
     <main class="game-shell">
       <header class="hud">
         <div class="hud-item">SCORE <span id="score">0</span></div>
         <div class="hud-item">WAVE <span id="wave">1</span></div>
-        <div class="hud-item">HP <span id="hp">5</span></div>
-        <div class="hud-item">COMBO <span id="combo">x1.0</span></div>
-        <div class="hud-item">DODGE <span id="dodge">2/2</span></div>
-        <div class="hud-item">MATS <span id="mats">12</span></div>
-        <div class="hud-item">MODE <span id="build">FIGHT</span></div>
-        <div class="hud-item">MAP <span id="map-label">Neon Block</span></div>
-        <div class="hud-item">HERO <span id="hero-label">Survivor</span></div>
-        <div class="hud-item">ACH <span id="ach-count">0/3</span></div>
+        <div class="hud-item">TOWER <span id="tower-hp">100%</span></div>
+        <div class="hud-item">HP <span id="player-hp">100%</span></div>
+        <div class="hud-item">$ <span id="cash">0</span></div>
+        <div class="hud-item">WEAPON <span id="weapon">PISTOL</span></div>
+        <div class="hud-item">SKIN <span id="skin">RANGER</span></div>
       </header>
 
-      <canvas id="game" width="320" height="180" aria-label="Zombie game area"></canvas>
+      <div class="canvas-wrap">
+        <canvas id="game" width="960" height="540" aria-label="Tower defense game"></canvas>
+
+        <section id="overlay" class="overlay visible">
+          <h1 id="overlay-title">TOWER OUTBREAK DEFENSE</h1>
+          <p id="overlay-text">
+            Defend the tower, run outside to fight, unlock guns and skins by score.
+          </p>
+          <button id="start-btn" type="button">START DEFENSE</button>
+        </section>
+      </div>
 
       <footer class="help">
-        <span>WASD/Arrows = Move</span>
-        <span>Mouse = Aim</span>
-        <span>Hold Click/Space = Fire</span>
-        <span>Shift = Dodge</span>
-        <span>B = Build Mode</span>
-        <span>R Rotate | Q/E Part</span>
+        <span>WASD Move</span>
+        <span>Mouse Aim + Attack</span>
+        <span>1/2/3 Guns</span>
+        <span>4/5 Bat/Sword</span>
+        <span>Shift Sprint</span>
+        <span>T Repair Tower ($200)</span>
       </footer>
 
-      <section id="overlay" class="overlay visible">
-        <h1 id="overlay-title">PIXEL ZOMBIE SIEGE</h1>
-        <p id="overlay-text">Pick a map, choose a hero, then survive the horde.</p>
-        <div class="sector-grid">
-          <div class="sector-card">
-            <h2 class="sector-title">MAP SECTOR</h2>
-            <div id="map-sector" class="chip-grid"></div>
-          </div>
-          <div class="sector-card">
-            <h2 class="sector-title">CHARACTER SECTOR</h2>
-            <div id="character-sector" class="chip-grid"></div>
-          </div>
-        </div>
-        <p id="achievement-text" class="achievement-text">
-          Unlock heroes by finishing achievements.
-        </p>
-        <button id="start-btn" type="button">START GAME</button>
-      </section>
+      <p id="status-text" class="status">Ready.</p>
     </main>
 
     <script src="./script.js"></script>
