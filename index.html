@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pixel Tower Siege Sideview</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div class="noise"></div>
+
+    <main class="game-shell">
+      <header class="hud">
+        <div class="hud-item">SCORE <span id="score">0</span></div>
+        <div class="hud-item">WAVE <span id="wave">1</span></div>
+        <div class="hud-item">TOWER <span id="tower-hp">100%</span></div>
+        <div class="hud-item">HP <span id="player-hp">100%</span></div>
+        <div class="hud-item">$ <span id="cash">0</span></div>
+        <div class="hud-item">WEAPON <span id="weapon">PISTOL</span></div>
+        <div class="hud-item">SKIN <span id="skin">RANGER</span></div>
+      </header>
+
+      <div class="canvas-wrap">
+        <canvas id="game" width="320" height="180" aria-label="Tower defense game"></canvas>
+
+        <section id="overlay" class="overlay visible">
+          <h1 id="overlay-title">PIXEL TOWER SIEGE</h1>
+          <p id="overlay-text">
+            Side-view defense. Leave the tower, fight outside, unlock guns and skins by score.
+          </p>
+          <button id="start-btn" type="button">START DEFENSE</button>
+        </section>
+      </div>
+
+      <footer class="help">
+        <span>A/D Move</span>
+        <span>W Jump</span>
+        <span>Mouse Aim + Attack</span>
+        <span>1/2/3 Guns</span>
+        <span>4/5 Bat/Sword</span>
+        <span>Shift Sprint</span>
+        <span>T Repair Tower ($200)</span>
+      </footer>
+
+      <p id="status-text" class="status">Ready.</p>
+    </main>
+
+    <script src="./script.js"></script>
+  </body>
+</html>
